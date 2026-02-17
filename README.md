@@ -21,7 +21,7 @@ PENDING_APPROVAL
 
 | Browse and Search | Cache Management, Download, Preview, and Refresh |
 | --- | --- |
-| ![Search Feature Demo](resources/searchFeature.gif) | ![features.png](/resources/features.png) |
+| ![Search Feature Demo](resources/searchFeature.gif) | <br>![features.png](/resources/features.png)<br> |
 
 ## How to Use
 
