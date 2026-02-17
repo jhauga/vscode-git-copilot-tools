@@ -1,8 +1,8 @@
-# Feature Specification: Awesome GitHub Copilot Browser
+# Feature Specification: Git Copilot Tools Browser
 
 ## Overview
 
-A VS Code extension that provides an explorer view to browse, preview, and download GitHub Copilot customizations (plugins, instructions, prompts, agents, and skills) from configurable GitHub repositories. Users can filter items by filename, preview content, and selectively download files to their workspace with proper GitHub Copilot folder structure. Repositories with non-standard folder layouts can be configured through custom folder-to-category mappings.
+A VS Code extension that provides an explorer view to browse, preview, and download GitHub Copilot customizations (agents, instructions, plugins, prompts, and skills) from configurable GitHub repositories. Users can filter items by filename, preview content, and selectively download files to their workspace with proper GitHub Copilot folder structure. Repositories with non-standard folder layouts can be configured through custom folder-to-category mappings.
 
 ## User Journey
 

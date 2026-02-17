@@ -14,8 +14,8 @@
   },
   "qna": "https://github.com/jhauga/vscode-git-copilot-tools/issues",
   "homepage": "https://github.com/jhauga/vscode-git-copilot-tools",
-  "description": "Browse and download instructions, prompts, plugins, and agents from the Git Copilot Tools community. Clone of jhauga/vscode-git-copilot-tools.",
-  "version": "0.1.40-fork.2",
+  "description": "Browse and download agents, instructions, plugins, prompts, and skills from GitHub repositories with Copilot custom tools. Clone of `timheuer/vscode-awesome-copilot` with additional features and slight variations.",
+  "version": "0.0.0",
   "icon": "icon.png",
   "engines": {
     "vscode": "^1.103.0"

@@ -1,14 +1,47 @@
 # VSCODE `git` Copilot Tools TODO
 
-- [ ] Add issue, asking permission to publish variation of [jhauga/vscode-git-copilot-tools](https://github.com/jhauga/vscode-git-copilot-tools/issues) when marketplace ready
-- [ ] Remove cloned repository breadcrumbs
-- [ ] Update documentation
+- [x] Add issue, asking permission to publish variation of [jhauga/vscode-git-copilot-tools](https://github.com/jhauga/vscode-git-copilot-tools/issues) when marketplace ready
+- [x] Remove cloned repository breadcrumbs
+- [x] Update documentation
   - Specify variation features simulaities to clone, and differences
-- [ ] Update graphics
+- [x] Update graphics
 
-## Additional Features
+## Extension Base
 
 Keeping core functionality add additionaly features that allow more customization, and tools to be downloaded for use with GitHub Copilot.
 
 - [x] Assign custom types for folders from the source repository that will be mapped and downloaded according to the cloned repo from [jhauga/vscode-awesome-copilo](https://github.com/jhauga/vscode-git-copilot-tools)
-- [x] Configure source folders by assigning a type of either: `collections`, `instructions`, `prompts`, `agents`, or `skills`; to a source folder, then mimic current behaviour
+- [x] Configure source folders by assigning a type of either: `agents`, `instructions`, `plugins`, `prompts`, or `skills`; to a source folder, then mimic current behaviour
+
+## Features
+
+### Major Features
+
+- [ ] **Bulk operations** - Allow users to select and download multiple items at once with checkboxes
+- [ ] **Favorites/bookmarking system** - Let users star frequently used items with auto-update on new versions
+- [ ] **Local file management** - Show downloaded items in tree view with ability to delete/manage from extension
+- [ ] **`cookbook` and recipe downloading** - Download Copilot `cookbook` tools and/or recipes
+
+### Minor Features
+
+- [ ] **Enhanced search with sorting** - Sort results by name, category, size, or date
+- [ ] **Markdown preview rendering** - Render .md files with proper formatting in preview panel
+- [ ] **One-click "Update All"** - Single command to update all items with newer versions available
+- [ ] **Inline quick actions in tree view** - Add context menu shortcuts for common operations
+- [ ] **Download history/statistics** - Track and display download analytics
+
+## Improvements
+
+### Major Improvements
+
+- [ ] **Offline mode with cached data** - Allow browsing and using cached items when offline
+- [ ] **Offline mode with local tools** - Allow local folders to mapped to source and downloaded per workspace
+- [ ] **Visual configuration UI** - Replace JSON editing with GUI for repository and folder mapping management
+
+### Minor Improvements
+
+- [ ] **Side-by-side diff view** - Show differences when items have updates available
+- [ ] **Advanced filtering UI** - Filter by repository, category, or size range
+- [ ] **Progressive loading** - Display cached items immediately while fetching updates in background
+- [ ] **File info panel** - Show size, modification date, and source repository for items
+- [ ] **Smart cache invalidation** - Implement more intelligent cache refresh strategies

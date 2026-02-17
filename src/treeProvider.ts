@@ -46,11 +46,11 @@ export class VscodeGitCopilotToolsTreeItem extends vscode.TreeItem {
             this.tooltip = 'Click to search/filter files';
         } else if (itemType === 'file' && copilotItem) {
             this.contextValue = 'copilotFile';
-            
+
             // Check if this item has an update available
             const hasUpdate = downloadTracker?.hasUpdate(copilotItem) || false;
             const isDownloaded = downloadTracker?.isDownloaded(copilotItem.id) || false;
-            
+
             // Skills and Plugins are folders, not individual files
             if (copilotItem.category === CopilotCategory.Skills && copilotItem.file.type === 'dir') {
                 this.description = hasUpdate ? '🔄 Update Available' : 'Skill Folder';
@@ -71,7 +71,7 @@ export class VscodeGitCopilotToolsTreeItem extends vscode.TreeItem {
             } else {
                 this.resourceUri = vscode.Uri.parse(copilotItem.file.download_url);
                 this.description = `${(copilotItem.file.size / 1024).toFixed(1)}KB`;
-                
+
                 // Plugins are special - they contain multiple files
                 if (copilotItem.category === CopilotCategory.Plugins) {
                     this.tooltip = new vscode.MarkdownString(
@@ -82,7 +82,7 @@ export class VscodeGitCopilotToolsTreeItem extends vscode.TreeItem {
                         `**${copilotItem.name}**\n\nSize: ${(copilotItem.file.size / 1024).toFixed(1)}KB\nRepo: ${copilotItem.repo ? copilotItem.repo.owner + '/' + copilotItem.repo.repo : ''}\n\nClick to preview content`
                     );
                 }
-                
+
                 // Set appropriate icon based on category
                 // If update available, use a badge/indicator overlay on the icon
                 let baseIconId: string;
@@ -105,7 +105,7 @@ export class VscodeGitCopilotToolsTreeItem extends vscode.TreeItem {
                     default:
                         baseIconId = 'file';
                 }
-                
+
                 // Use cloud-download icon with color indicator if update is available
                 if (hasUpdate) {
                     this.iconPath = new vscode.ThemeIcon('cloud-download', new vscode.ThemeColor('notificationsWarningIcon.foreground'));
@@ -141,7 +141,7 @@ export class VscodeGitCopilotToolsProvider implements vscode.TreeDataProvider<Vs
         this.context = context;
         this.downloadTracker = downloadTracker;
         this.searchBar = new SearchBar();
-        
+
         // Listen to search changes and refresh the tree
         this.searchBar.onSearchChange(() => {
             getLogger().debug('[TreeProvider] Search term changed, refreshing tree view');
@@ -176,7 +176,7 @@ export class VscodeGitCopilotToolsProvider implements vscode.TreeDataProvider<Vs
         // Find and remove cached data for this specific repo
         const repoKey = `${repo.owner}/${repo.repo}`;
         this.repoItems.delete(repoKey);
-        
+
         // Clear loading states for this repo to allow fresh requests
         const loadingKeysToDelete = Array.from(this.loading).filter(key => key.startsWith(`${repoKey}-`));
         loadingKeysToDelete.forEach(key => this.loading.delete(key));
@@ -184,7 +184,7 @@ export class VscodeGitCopilotToolsProvider implements vscode.TreeDataProvider<Vs
         // Find the tree item for this repository
         const repos = this.context ? RepoStorage.getSources(this.context) : [{ owner: 'github', repo: 'vscode-git-copilot-tools', label: 'Git Copilot Tools' }];
         const targetRepo = repos.find(r => r.owner === repo.owner && r.repo === repo.repo && (r.baseUrl || 'github.com') === (repo.baseUrl || 'github.com'));
-        
+
         if (targetRepo) {
             // Create the tree item for this repo
             const repoTreeItem = new VscodeGitCopilotToolsTreeItem(
@@ -221,10 +221,10 @@ export class VscodeGitCopilotToolsProvider implements vscode.TreeDataProvider<Vs
 
         for (const category of categories) {
             const loadingKey = `${repoKey}-${category}`;
-            
+
             if (!this.loading.has(loadingKey)) {
                 this.loading.add(loadingKey);
-                
+
                 try {
                     const files = await this.githubService.getFilesByRepo(repo, category, forceRefresh);
                     const items = files.map((file: GitHubFile) => ({
@@ -239,7 +239,7 @@ export class VscodeGitCopilotToolsProvider implements vscode.TreeDataProvider<Vs
                 } catch (error: any) {
                     // Handle different types of errors
                     const statusCode = error?.response?.status || (error?.message?.includes('404') ? 404 : undefined);
-                    
+
                     if (statusCode === 404) {
                         // 404 is expected when a repository doesn't have a particular category folder
                         repoData.set(category, []);
@@ -377,7 +377,7 @@ export class VscodeGitCopilotToolsProvider implements vscode.TreeDataProvider<Vs
             } catch (error: any) {
                 // Handle different types of errors
                 const statusCode = error?.response?.status || (error?.message?.includes('404') ? 404 : undefined);
-                
+
                 if (statusCode === 404) {
                     // 404 is expected when a repository doesn't have a particular category folder
                     // Set empty array and don't show error to user
@@ -430,7 +430,7 @@ export class VscodeGitCopilotToolsProvider implements vscode.TreeDataProvider<Vs
                 } catch (error: any) {
                     // Handle different types of errors
                     const statusCode = error?.response?.status || (error?.message?.includes('404') ? 404 : undefined);
-                    
+
                     if (statusCode === 404) {
                         // 404 is expected when a repository doesn't have a particular category folder
                         // Set empty array and don't show error to user

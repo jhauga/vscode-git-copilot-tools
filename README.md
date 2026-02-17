@@ -1,28 +1,31 @@
-# Awesome GitHub Copilot Browser
+# Git Copilot Tools
 
-A VS Code extension that allows you to browse, preview, and download GitHub Copilot customizations from the [vscode-git-copilot-tools repository](https://github.com/github/vscode-git-copilot-tools), and other repositories with VSCode Copilot `agent`, `instruction`, `plugin`, `prompt`, and `skill` tools. Slight variation of [timheuer/vscode-vscode-git-copilot-tools](https://github.com/timheuer/vscode-vscode-git-copilot-tools) VSCode extension.
+A [Microsoft Visual Studio Code](https://code.visualstudio.com/) (*VS Code*) extension that allows you to browse, preview, and download GitHub Copilot customizations. The default repository is [github/awesome-copilot](https://github.com/github/awesome-copilot), but other repositories with VS Code Copilot `agent`, `instruction`, `plugin`, `prompt`, and `skill` tools can be used.
 
+This tool is a slight variation of [timheuer/vscode-vscode-git-copilot-tools](https://github.com/timheuer/vscode-vscode-git-copilot-tools) VS Code extension.
+
+<!--
 ## Install in VS Code
 
-[![Install in VS Code](https://img.shields.io/badge/Install%20in-VS%20Code-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](vscode:extension/jhauga.vscode-git-copilot-tools)
-[![Install in VS Code Insiders](https://img.shields.io/badge/Install%20in-VS%20Code%20Insiders-24bfa5?style=flat-square&logo=visualstudiocode&logoColor=white)](vscode-insiders:extension/jhauga.vscode-git-copilot-tools)
+PENDING_APPROVAL
+ -->
 
 ## Features
 
-- **🔍 Browse**: Explore chat modes, instructions, prompts, agents, and skills in a convenient tree view
+- **🔍 Browse**: Explore agents, instructions, plugins, prompts, and skills in a convenient tree view
 - **� Search**: Quickly find files with real-time filtering across all categories
 - **📖 Preview**: View file content before downloading
 - **⬇️ Download**: Save files to appropriate `.github/` folders in your workspace
 - **🔃 Refresh**: Update repository data with manual refresh
 - **💾 Caching**: Smart caching for better performance
 
-| Browse and Search | | Cache Management, Download, Preview, and Refresh |
-| --- | --- | --- |
-| ![Search Feature Demo](resources/searchFeature.gif) |  | ![features.png](/resources/features.png) |
+| Browse and Search | Cache Management, Download, Preview, and Refresh |
+| --- | --- |
+| ![Search Feature Demo](resources/searchFeature.gif) | ![features.png](/resources/features.png) |
 
 ## How to Use
 
-1. **Open the Extension**: Click the new Activity Bar icon (checkmark document) titled **Git Copilot Tools**. (Previously this view appeared under Explorer; it now has its own dedicated container with a proper icon.)
+1. **Open the Extension**: Click the Activity Bar icon, or use the view under Explorer.
 2. **Search Files**: Use the search bar at the top to filter files across all categories in real-time
 3. **Browse Categories**: Expand Plugins, Instructions, Prompts, Agents, or Skills sections
 4. **Preview Content**: Click the preview icon on any file to see its content
@@ -33,11 +36,11 @@ A VS Code extension that allows you to browse, preview, and download GitHub Copi
 
 Downloaded files are organized in your workspace as follows:
 
-- **Plugins** → `.github/plugins/`
+- **Agents**  → `.github/agents/`
 - **Instructions** → `.github/instructions/`
+- **Plugins**      → `.github/plugins/`
 - **Prompts** → `.github/prompts/`
-- **Agents** → `.github/agents/`
-- **Skills** → `.github/skills/` (entire folders with SKILL.md and supporting files)
+- **Skills**  → `.github/skills/` (*entire folders with SKILL.md and supporting files*)
 
 These folders will be created automatically if they don't exist.
 
@@ -49,16 +52,17 @@ These folders will be created automatically if they don't exist.
 
 ## Custom Folder Mappings
 
-Not all source repositories follow the default `.github/{category}` folder structure. The
-extension supports configuring custom folder-to-category mappings per repository so you can
-browse and download content from any GitHub repository regardless of its directory layout.
+Not all source repositories follow the default `.github/{category}` folder structure, and
+may not have the correct names. The extension supports configuring custom folder-to-category
+mappings per repository so you can browse and download content from any GitHub repository
+regardless of its directory layout.
 
 ### Automatic Configuration via UI
 
 When you add a new source repository through **Manage Sources > Add Repository** and none of
 the standard category folders (`agents`, `instructions`, `plugins`, `prompts`, `skills`) are
-found, the extension opens a configuration panel where you can manually map repository folders
-to categories.
+found, the extension thows message box that will allow you to opens a configuration panel
+where you can manually map repository folders to categories.
 
 The panel shows one input field per category. For each category you can enter:
 
@@ -144,7 +148,7 @@ All properties are optional. Omitted properties use the default category path.
 ```json
 {
   "owner": "github",
-  "repo": "vscode-git-copilot-tools"
+  "repo": "awesome-copilot"
 }
 ```
 
@@ -202,14 +206,13 @@ npm run test
 
 ## UI Placement / Custom View Container
 
-The extension contributes a custom Activity Bar view container named **Git Copilot Tools**. If you prefer to move or hide it:
+The extension contributes a custom Activity Bar view container named **Git Copilot Tools**.
+If you prefer to move or hide it:
 
 - Right-click the Activity Bar to toggle visibility.
 - Drag the view into a different location if desired (VS Code will persist your layout).
 
-If you previously dragged the old Explorer-based view into the Activity Bar and saw a generic label/icon, this update fixes that by supplying a dedicated container with themed icons (light/dark).
-
-**Enjoy browsing and using awesome GitHub Copilot customizations!**
+**Enjoy browsing and using awesome GitHub Copilot customizations tools!**
 
 ## License
 

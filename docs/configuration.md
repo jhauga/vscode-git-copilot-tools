@@ -38,7 +38,7 @@ following properties:
 
 When a source repository does not use the default folder layout, you can configure custom
 paths for each content category. If omitted, the extension uses the standard category name
-as the folder path (e.g., `plugins`, `instructions`, `prompts`, `agents`, `skills`).
+as the folder path (e.g., `agents`, `instructions`, `plugins`, `prompts`, `skills`).
 
 Each property in `folderMappings` corresponds to a content category:
 
@@ -66,7 +66,7 @@ Each property in `folderMappings` corresponds to a content category:
   "vscode-git-copilot-tools.repositories": [
     {
       "owner": "github",
-      "repo": "vscode-git-copilot-tools"
+      "repo": "awesome-copilot"
     }
   ]
 }
@@ -251,10 +251,10 @@ Downloaded content is saved to the workspace under the following paths:
 
 | Category | Local Path |
 |---|---|
-| Plugins | `.github/plugins` |
-| Instructions | `.github/instructions` |
-| Prompts | `.github/prompts` |
 | Agents | `.github/agents` |
+| Instructions | `.github/instructions` |
+| Plugins | `.github/plugins` |
+| Prompts | `.github/prompts` |
 | Skills | `.github/skills` |
 
 Folders are created automatically if they do not exist. The local save paths are fixed

@@ -85,7 +85,7 @@ export class SearchBar {
 
         const filtered = items.filter(item => this.matchesSearch(item.name));
         getLogger().debug(`[SearchBar] Filtered ${items.length} items to ${filtered.length} matches`);
-        
+
         return filtered;
     }
 

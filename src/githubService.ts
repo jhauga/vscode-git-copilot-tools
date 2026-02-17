@@ -23,7 +23,7 @@ export class GitHubService {
     private async ensureGitHubAuth(isEnterprise: boolean = false): Promise<boolean> {
         const config = vscode.workspace.getConfiguration('vscode-git-copilot-tools');
         const enableAuth = config.get<boolean>('enableGithubAuth', true);
-        
+
         if (!enableAuth) {
             return false;
         }
@@ -73,7 +73,7 @@ export class GitHubService {
     private async checkAuthentication(): Promise<boolean> {
         try {
             const config = vscode.workspace.getConfiguration('vscode-git-copilot-tools');
-            
+
             // Check for enterprise token
             const enterpriseToken = config.get<string>('enterpriseToken');
             if (enterpriseToken) {
@@ -85,7 +85,7 @@ export class GitHubService {
                 createIfNone: false,
                 silent: true
             });
-            
+
             return !!session;
         } catch (error) {
             return false;
@@ -100,7 +100,7 @@ export class GitHubService {
         if (statusCode === 401 || statusCode === 403) {
             const config = vscode.workspace.getConfiguration('vscode-git-copilot-tools');
             const enableAuth = config.get<boolean>('enableGithubAuth', true);
-            
+
             if (!enableAuth) {
                 this.statusBarManager.showWarning('GitHub authentication is disabled. Enable it to avoid rate limits.');
                 return false;
@@ -109,21 +109,21 @@ export class GitHubService {
             // Check if this is a rate limit issue
             const rateLimitRemaining = error.response?.headers['x-ratelimit-remaining'];
             const rateLimitReset = error.response?.headers['x-ratelimit-reset'];
-            
+
             if (rateLimitRemaining === '0' || rateLimitRemaining === 0) {
                 // Definitely rate limited
                 if (rateLimitReset) {
                     const resetDate = new Date(parseInt(rateLimitReset) * 1000);
                     const waitMinutes = Math.ceil((resetDate.getTime() - Date.now()) / (60 * 1000));
                     this.statusBarManager.showWarning(`Rate limit exceeded. Resets in ${waitMinutes} minutes.`);
-                    
+
                     // Suggest authentication if not already authenticated
                     const authChoice = await vscode.window.showWarningMessage(
                         `GitHub API rate limit exceeded. Sign in to GitHub to get 5,000 requests/hour instead of 60.`,
                         'Sign In',
                         'Wait'
                     );
-                    
+
                     if (authChoice === 'Sign In') {
                         return await this.ensureGitHubAuth(isEnterprise);
                     }
@@ -136,7 +136,7 @@ export class GitHubService {
                     'Sign In',
                     'Skip'
                 );
-                
+
                 if (authChoice === 'Sign In') {
                     return await this.ensureGitHubAuth(isEnterprise);
                 }
@@ -189,7 +189,7 @@ export class GitHubService {
         // Try to authenticate for all GitHub requests (both public and enterprise)
         const config = vscode.workspace.getConfiguration('vscode-git-copilot-tools');
         const enableAuth = config.get<boolean>('enableGithubAuth', true);
-        
+
         if (enableAuth) {
             if (isEnterprise) {
                 // Enhanced enterprise GitHub auth headers
@@ -235,11 +235,11 @@ export class GitHubService {
         if (context) {
             try { sources = RepoStorage.getSources(context); } catch { }
         }
-        
+
         // Proactively check for authentication to avoid 403 errors
         const config = vscode.workspace.getConfiguration('vscode-git-copilot-tools');
         const enableAuth = config.get<boolean>('enableGithubAuth', true);
-        
+
         if (enableAuth) {
             // Check if we have any authentication
             const hasAuth = await this.checkAuthentication();
@@ -249,7 +249,7 @@ export class GitHubService {
                 await this.ensureGitHubAuth(false);
             }
         }
-        
+
         const now = Date.now();
         let allFiles: GitHubFile[] = [];
         for (const repo of sources) {
@@ -319,7 +319,7 @@ export class GitHubService {
                         // Retry with new authentication
                         const newHeaders = await this.createRequestHeaders(isEnterprise);
                         axiosConfig.headers = newHeaders;
-                        
+
                         if (isEnterprise && allowInsecureEnterpriseCerts) {
                             const originalRejectUnauthorized = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
                             process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
@@ -364,7 +364,7 @@ export class GitHubService {
                 // Handle different types of errors
                 const isAxiosError = error && typeof error === 'object' && 'response' in error;
                 const statusCode = isAxiosError ? (error as any).response?.status : undefined;
-                
+
                 if (statusCode === 404) {
                     // 404 is expected when a repository doesn't have a particular category folder
                     getLogger().debug(`Category '${category}' not found in ${repo.owner}/${repo.repo} (this is normal)`);
@@ -487,7 +487,7 @@ export class GitHubService {
                     // Retry with new authentication
                     const newHeaders = await this.createRequestHeaders(isEnterprise);
                     axiosConfig.headers = newHeaders;
-                    
+
                     if (isEnterprise && allowInsecureEnterpriseCerts) {
                         const originalRejectUnauthorized = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
                         process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
@@ -534,7 +534,7 @@ export class GitHubService {
             // Handle different types of errors
             const isAxiosError = error && typeof error === 'object' && 'response' in error;
             const statusCode = isAxiosError ? (error as any).response?.status : undefined;
-            
+
             if (statusCode === 404) {
                 // 404 is expected when a repository doesn't have a particular category folder
                 // Return empty array instead of throwing error
@@ -797,7 +797,7 @@ export class GitHubService {
             if (subdirs.length > 0) {
                 const subContentPromises = subdirs.map(dir => this.getDirectoryContents(repo, dir.path));
                 const subContentsArrays = await Promise.all(subContentPromises);
-                
+
                 // Flatten and add all subdirectory contents
                 for (const subContents of subContentsArrays) {
                     contents.push(...subContents);

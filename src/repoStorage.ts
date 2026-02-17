@@ -16,13 +16,13 @@ export class RepoStorage {
     // First try to get from VS Code settings
     const config = vscode.workspace.getConfiguration();
     const configSources = config.get<RepoSource[]>(CONFIG_KEY);
-    
+
     if (configSources && Array.isArray(configSources) && configSources.length > 0) {
       // Sync config to global state for backward compatibility
       context.globalState.update(STORAGE_KEY, configSources);
       return configSources;
     }
-    
+
     // Fallback to global state
     const raw = context.globalState.get<RepoSource[]>(STORAGE_KEY);
     if (raw && Array.isArray(raw) && raw.length > 0) {
@@ -30,7 +30,7 @@ export class RepoStorage {
       this.syncToConfig(raw);
       return raw;
     }
-    
+
     // Use defaults and sync to both
     this.syncToConfig(DEFAULT_SOURCES);
     context.globalState.update(STORAGE_KEY, DEFAULT_SOURCES);
@@ -43,7 +43,7 @@ export class RepoStorage {
   static async setSources(context: vscode.ExtensionContext, sources: RepoSource[]): Promise<void> {
     // Update global state
     await context.globalState.update(STORAGE_KEY, sources);
-    
+
     // Update VS Code settings
     await this.syncToConfig(sources);
   }
@@ -75,11 +75,11 @@ export class RepoStorage {
       if (event.affectsConfiguration(CONFIG_KEY)) {
         const config = vscode.workspace.getConfiguration();
         const configSources = config.get<RepoSource[]>(CONFIG_KEY);
-        
+
         if (configSources && Array.isArray(configSources)) {
           // Sync from config to global state
           await context.globalState.update(STORAGE_KEY, configSources);
-          
+
           // Notify callback if provided
           if (callback) {
             callback();

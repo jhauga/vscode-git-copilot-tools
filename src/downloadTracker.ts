@@ -27,7 +27,7 @@ export class DownloadTracker {
     async recordDownload(item: CopilotItem, content?: string): Promise<void> {
         try {
             const downloads = this.getDownloads();
-            
+
             // Calculate SHA hash from content if provided, or use file SHA from GitHub
             let sha: string;
             if (content) {
@@ -52,9 +52,9 @@ export class DownloadTracker {
 
             // Store or update the download metadata
             downloads[item.id] = metadata;
-            
+
             await this.context.globalState.update(DOWNLOADS_STORAGE_KEY, downloads);
-            
+
             getLogger().debug('Recorded download:', { itemId: item.id, itemName: item.name });
         } catch (error) {
             getLogger().error('Failed to record download:', error);
@@ -113,7 +113,7 @@ export class DownloadTracker {
      */
     findItemsWithUpdates(allItems: CopilotItem[]): CopilotItem[] {
         const itemsWithUpdates: CopilotItem[] = [];
-        
+
         for (const item of allItems) {
             if (this.hasUpdate(item)) {
                 itemsWithUpdates.push(item);

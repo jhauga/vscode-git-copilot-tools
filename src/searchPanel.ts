@@ -44,9 +44,9 @@ export class SearchViewProvider implements vscode.WebviewViewProvider {
         // Listen to search changes from other sources and update the webview
         this.searchBar.onSearchChange((term) => {
             if (this.view) {
-                this.view.webview.postMessage({ 
-                    command: 'updateSearch', 
-                    text: term 
+                this.view.webview.postMessage({
+                    command: 'updateSearch',
+                    text: term
                 });
             }
         });
@@ -63,7 +63,7 @@ export class SearchViewProvider implements vscode.WebviewViewProvider {
 
     private getHtmlContent(webview: vscode.Webview): string {
         const searchTerm = this.searchBar.getSearchTerm();
-        
+
         return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -153,9 +153,9 @@ export class SearchViewProvider implements vscode.WebviewViewProvider {
     <div class="search-container">
         <div class="search-wrapper">
             <span class="search-icon">🔍</span>
-            <input 
-                type="text" 
-                class="search-input" 
+            <input
+                type="text"
+                class="search-input"
                 id="searchInput"
                 placeholder="Filter files by name..."
                 value="${searchTerm}"
