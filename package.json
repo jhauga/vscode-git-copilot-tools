@@ -1,0 +1,358 @@
+{
+  "name": "awesome-copilot",
+  "displayName": "Awesome Copilot (clone)",
+  "publisher": "jhauga",
+  "author": {
+    "name": "Tim Heuer"
+  },
+  "bugs": {
+    "url": "https://github.com/jhauga/vscode-git-copilot-tools/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jhauga/vscode-git-copilot-tools"
+  },
+  "qna": "https://github.com/jhauga/vscode-git-copilot-tools/issues",
+  "homepage": "https://github.com/jhauga/vscode-git-copilot-tools",
+  "description": "Browse and download instructions, prompts, plugins, and agents from the Awesome Copilot community. Clone of jhauga/vscode-git-copilot-tools.",
+  "version": "0.1.40-fork.2",
+  "icon": "icon.png",
+  "engines": {
+    "vscode": "^1.103.0"
+  },
+  "activationEvents": [
+    "onView:awesomeCopilotExplorer"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "awesomeCopilot",
+          "title": "Awesome Copilot (clone)",
+          "icon": "resources/awesome-copilot.svg"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Awesome Copilot (clone)",
+      "properties": {
+        "awesome-copilot.repositories": {
+          "type": "array",
+          "title": "Repositories",
+          "description": "Configure GitHub repositories as content sources",
+          "default": [
+            {
+              "owner": "github",
+              "repo": "awesome-copilot",
+              "label": "Awesome Copilot (clone)"
+            }
+          ],
+          "items": {
+            "type": "object",
+            "properties": {
+              "owner": {
+                "type": "string",
+                "description": "Repository owner"
+              },
+              "repo": {
+                "type": "string",
+                "description": "Repository name"
+              },
+              "label": {
+                "type": "string",
+                "description": "Display name (optional)"
+              },
+              "baseUrl": {
+                "type": "string",
+                "description": "GitHub Enterprise URL (optional)"
+              },
+              "folderMappings": {
+                "type": "object",
+                "description": "Custom folder-to-category mappings (optional). Map category names to custom folder paths, 'root' (entire repo), or null (excluded).",
+                "properties": {
+                  "agents": { "type": ["string", "null"], "description": "Path to agents folder, 'root', or null to exclude" },
+                  "instructions": { "type": ["string", "null"], "description": "Path to instructions folder, 'root', or null to exclude" },
+                  "plugins": { "type": ["string", "null"], "description": "Path to plugins folder, 'root', or null to exclude" },
+                  "prompts": { "type": ["string", "null"], "description": "Path to prompts folder, 'root', or null to exclude" },
+                  "skills": { "type": ["string", "null"], "description": "Path to skills folder, 'root', or null to exclude" }
+                }
+              }
+            }
+          },
+          "scope": "application"
+        },
+        "awesome-copilot.enterpriseToken": {
+          "type": "string",
+          "default": "",
+          "description": "Personal Access Token for GitHub Enterprise authentication",
+          "scope": "application",
+          "markdownDescription": "Required permissions: `repo`, `read:org`, `read:user`  \nCreate at: your-github-enterprise.com/settings/tokens"
+        },
+        "awesome-copilot.cacheTimeout": {
+          "type": "number",
+          "default": 3600000,
+          "minimum": 60000,
+          "maximum": 86400000,
+          "description": "Cache duration in milliseconds (default: 1 hour)",
+          "scope": "application"
+        },
+        "awesome-copilot.autoRefresh": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically refresh content on VS Code startup",
+          "scope": "application"
+        },
+        "awesome-copilot.showTreeView": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show/hide the Awesome Copilot tree view in the Explorer panel",
+          "scope": "application"
+        },
+        "awesome-copilot.allowInsecureEnterpriseCerts": {
+          "type": "boolean",
+          "default": false,
+          "description": "⚠️ SECURITY WARNING: Allow insecure certificates for Enterprise GitHub servers. Only enable this for trusted enterprise environments with self-signed certificates.",
+          "scope": "application",
+          "markdownDescription": "**⚠️ SECURITY WARNING:** This setting disables TLS certificate validation for Enterprise GitHub servers only. Only enable for trusted enterprise environments with self-signed certificates.  \n\n**Default: `false` (secure)**  \n\n**Note:** If you're getting certificate errors with enterprise GitHub, enable this temporarily to add your repository, then you can disable it again for better security."
+        },
+        "awesome-copilot.enableGithubAuth": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable GitHub authentication via VS Code to increase rate limits from 60 to 5,000 requests per hour",
+          "scope": "application",
+          "title": "Enable GitHub Authentication",
+          "markdownDescription": "**Enable GitHub Authentication**  \n\nWhen enabled, the extension will use VS Code's GitHub authentication to access the API with higher rate limits:  \n- **Authenticated:** 5,000 requests/hour  \n- **Unauthenticated:** 60 requests/hour  \n\nThe extension will prompt you to sign in when needed."
+        },
+        "awesome-copilot.logLevel": {
+          "type": "string",
+          "enum": [
+            "error",
+            "warn",
+            "info",
+            "debug",
+            "trace"
+          ],
+          "enumDescriptions": [
+            "Only show error messages",
+            "Show warnings and errors",
+            "Show informational messages, warnings, and errors",
+            "Show debug information and all above",
+            "Show all logging including trace information"
+          ],
+          "default": "info",
+          "description": "Set the logging level for the Awesome Copilot extension",
+          "scope": "application",
+          "title": "Log Level"
+        },
+        "awesome-copilot.checkForUpdates": {
+          "type": "boolean",
+          "default": true,
+          "description": "Check for updates to downloaded items and notify when newer versions are available",
+          "scope": "application"
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "awesome-copilot.refreshAwesomeCopilot",
+        "title": "Refresh",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "awesome-copilot.downloadItem",
+        "title": "Download",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "awesome-copilot.previewItem",
+        "title": "Preview",
+        "icon": "$(open-preview)"
+      },
+      {
+        "command": "awesome-copilot.manageSources",
+        "title": "Awesome Copilot: Manage Sources",
+        "icon": "$(repo)"
+      },
+      {
+        "command": "awesome-copilot.removeRepo",
+        "title": "Remove Repository",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "awesome-copilot.refreshRepo",
+        "title": "Refresh Repository",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "awesome-copilot.configureEnterpriseToken",
+        "title": "Awesome Copilot: Configure Enterprise Token",
+        "icon": "$(key)"
+      },
+      {
+        "command": "awesome-copilot.clearEnterpriseToken",
+        "title": "Awesome Copilot: Clear Enterprise Token",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "awesome-copilot.toggleTreeView",
+        "title": "Awesome Copilot: Toggle Tree View",
+        "icon": "$(eye)"
+      },
+      {
+        "command": "awesome-copilot.showTreeView",
+        "title": "Awesome Copilot: Show Tree View",
+        "icon": "$(eye)"
+      },
+      {
+        "command": "awesome-copilot.hideTreeView",
+        "title": "Awesome Copilot: Hide Tree View",
+        "icon": "$(eye-closed)"
+      },
+      {
+        "command": "awesome-copilot.signInToGitHub",
+        "title": "Awesome Copilot: Sign in to GitHub",
+        "icon": "$(github)"
+      },
+      {
+        "command": "awesome-copilot.signOutFromGitHub",
+        "title": "Awesome Copilot: Sign out from GitHub",
+        "icon": "$(sign-out)"
+      },
+      {
+        "command": "awesome-copilot.openRepoInBrowser",
+        "title": "Open Repository in Browser",
+        "icon": "$(github)"
+      },
+      {
+        "command": "awesome-copilot.searchFiles",
+        "title": "Search/Filter Files",
+        "icon": "$(search)"
+      },
+      {
+        "command": "awesome-copilot.clearSearch",
+        "title": "Clear Search Filter",
+        "icon": "$(clear-all)"
+      }
+    ],
+    "views": {
+      "awesomeCopilot": [
+        {
+          "type": "webview",
+          "id": "awesomeCopilotSearch",
+          "name": "Search Awesome Copilot",
+          "icon": "$(search)",
+          "visibility": "visible"
+        },
+        {
+          "id": "awesomeCopilotExplorer",
+          "name": "GitHub / awesome-copilot",
+          "icon": "icon.png"
+        }
+      ],
+      "explorer": [
+        {
+          "type": "webview",
+          "id": "awesomeCopilotSearchSecondary",
+          "name": "Search Awesome Copilot",
+          "icon": "$(search)",
+          "visibility": "visible"
+        },
+        {
+          "id": "awesomeCopilotExplorerSecondary",
+          "name": "Awesome Copilot (clone)",
+          "icon": "$(list-tree)"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "awesomeCopilotExplorer",
+        "contents": "No repositories configured.\n[Manage Sources](command:awesome-copilot.manageSources)\nBrowse and download instructions, prompts, plugins, and agents from the Awesome Copilot community."
+      },
+      {
+        "view": "awesomeCopilotExplorerSecondary",
+        "contents": "No repositories configured.\n[Manage Sources](command:awesome-copilot.manageSources)\nBrowse and download instructions, prompts, plugins, and agents from the Awesome Copilot community."
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "awesome-copilot.refreshAwesomeCopilot",
+          "when": "view == awesomeCopilotExplorer || view == awesomeCopilotExplorerSecondary",
+          "group": "navigation@2"
+        },
+        {
+          "command": "awesome-copilot.manageSources",
+          "when": "view == awesomeCopilotExplorer || view == awesomeCopilotExplorerSecondary",
+          "group": "navigation@3"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "awesome-copilot.downloadItem",
+          "when": "(view == awesomeCopilotExplorer || view == awesomeCopilotExplorerSecondary) && viewItem == copilotFile",
+          "group": "inline@1"
+        },
+        {
+          "command": "awesome-copilot.previewItem",
+          "when": "(view == awesomeCopilotExplorer || view == awesomeCopilotExplorerSecondary) && viewItem == copilotFile",
+          "group": "inline@2"
+        },
+        {
+          "command": "awesome-copilot.openRepoInBrowser",
+          "when": "(view == awesomeCopilotExplorer || view == awesomeCopilotExplorerSecondary) && viewItem == copilotRepo",
+          "group": "inline@1"
+        },
+        {
+          "command": "awesome-copilot.refreshRepo",
+          "when": "(view == awesomeCopilotExplorer || view == awesomeCopilotExplorerSecondary) && viewItem == copilotRepo",
+          "group": "inline@2"
+        },
+        {
+          "command": "awesome-copilot.removeRepo",
+          "when": "(view == awesomeCopilotExplorer || view == awesomeCopilotExplorerSecondary) && viewItem == copilotRepo",
+          "group": "inline@3"
+        },
+        {
+          "command": "awesome-copilot.removeRepo",
+          "when": "(view == awesomeCopilotExplorer || view == awesomeCopilotExplorerSecondary) && viewItem == copilotRepo",
+          "group": "1_repo@1"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run package",
+    "compile": "npm run check-types && npm run lint && node esbuild.js",
+    "watch": "npm-run-all -p watch:*",
+    "watch:esbuild": "node esbuild.js --watch",
+    "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
+    "package": "npm run check-types && npm run lint && node esbuild.js --production",
+    "compile-tests": "tsc -p . --outDir out",
+    "watch-tests": "tsc -p . -w --outDir out",
+    "pretest": "npm run compile-tests && npm run compile && npm run lint",
+    "check-types": "tsc --noEmit",
+    "lint": "eslint src",
+    "test": "vscode-test",
+    "deploy": "vsce publish"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.10",
+    "@types/node": "20.x",
+    "@types/vscode": "^1.103.0",
+    "@typescript-eslint/eslint-plugin": "^8.31.1",
+    "@typescript-eslint/parser": "^8.31.1",
+    "@vscode/test-cli": "^0.0.12",
+    "@vscode/test-electron": "^2.5.2",
+    "esbuild": "^0.25.3",
+    "eslint": "^9.25.1",
+    "nerdbank-gitversioning": "^3.6.133",
+    "npm-run-all": "^4.1.5",
+    "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "@timheuer/vscode-ext-logger": "^0.1.35",
+    "axios": "^1.11.0"
+  }
+}

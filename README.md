@@ -1,0 +1,216 @@
+# Awesome GitHub Copilot Browser
+
+A VS Code extension that allows you to browse, preview, and download GitHub Copilot customizations from the [awesome-copilot repository](https://github.com/github/awesome-copilot), and other repositories with VSCode Copilot `agent`, `instruction`, `plugin`, `prompt`, and `skill` tools. Slight variation of [timheuer/vscode-awesome-copilot](https://github.com/timheuer/vscode-awesome-copilot) VSCode extension.
+
+## Install in VS Code
+
+[![Install in VS Code](https://img.shields.io/badge/Install%20in-VS%20Code-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](vscode:extension/jhauga.awesome-copilot)
+[![Install in VS Code Insiders](https://img.shields.io/badge/Install%20in-VS%20Code%20Insiders-24bfa5?style=flat-square&logo=visualstudiocode&logoColor=white)](vscode-insiders:extension/jhauga.awesome-copilot)
+
+## Features
+
+- **🔍 Browse**: Explore chat modes, instructions, prompts, agents, and skills in a convenient tree view
+- **� Search**: Quickly find files with real-time filtering across all categories
+- **📖 Preview**: View file content before downloading
+- **⬇️ Download**: Save files to appropriate `.github/` folders in your workspace
+- **🔃 Refresh**: Update repository data with manual refresh
+- **💾 Caching**: Smart caching for better performance
+
+| Browse and Search | | Cache Management, Download, Preview, and Refresh |
+| --- | --- | --- |
+| ![Search Feature Demo](resources/searchFeature.gif) |  | ![features.png](/resources/features.png) |
+
+## How to Use
+
+1. **Open the Extension**: Click the new Activity Bar icon (checkmark document) titled **Awesome Copilot**. (Previously this view appeared under Explorer; it now has its own dedicated container with a proper icon.)
+2. **Search Files**: Use the search bar at the top to filter files across all categories in real-time
+3. **Browse Categories**: Expand Plugins, Instructions, Prompts, Agents, or Skills sections
+4. **Preview Content**: Click the preview icon on any file to see its content
+5. **Download Files**: Click the download icon to save files to your workspace
+6. **Refresh Data**: Click the refresh icon in the view title to update repository data
+
+## Folder Structure
+
+Downloaded files are organized in your workspace as follows:
+
+- **Plugins** → `.github/plugins/`
+- **Instructions** → `.github/instructions/`
+- **Prompts** → `.github/prompts/`
+- **Agents** → `.github/agents/`
+- **Skills** → `.github/skills/` (entire folders with SKILL.md and supporting files)
+
+These folders will be created automatically if they don't exist.
+
+> [!NOTE]
+> Plugins are unique in that each plugin will download a collection of items from the plugin's `<plugin>/.github/plugin/plugin.json` file, and download the corresponding items to the workspace `.github` folder accordingly.
+
+> [!NOTE]
+> Skills are unique in that each skill is a complete folder containing a `SKILL.md` file and potentially other supporting files. When you download a skill, the entire folder structure is preserved.
+
+## Custom Folder Mappings
+
+Not all source repositories follow the default `.github/{category}` folder structure. The
+extension supports configuring custom folder-to-category mappings per repository so you can
+browse and download content from any GitHub repository regardless of its directory layout.
+
+### Automatic Configuration via UI
+
+When you add a new source repository through **Manage Sources > Add Repository** and none of
+the standard category folders (`agents`, `instructions`, `plugins`, `prompts`, `skills`) are
+found, the extension opens a configuration panel where you can manually map repository folders
+to categories.
+
+The panel shows one input field per category. For each category you can enter:
+
+| Input Value | Behavior |
+|---|---|
+| *(blank)* | Uses the default path (`.github/{category}`) |
+| `root` | Treats the entire repository root as this category's source. **All other categories are disabled.** |
+| `null` | Explicitly excludes this category (it will not appear in the tree view) |
+| Any other path | Custom folder path within the repository (e.g., `src/my-prompts`, `copilot/instructions`) |
+
+> [!IMPORTANT]
+> If any category is set to `root`, all other category inputs are disabled because the entire
+> repository is treated as a single content source.
+
+### Manual Configuration via Settings
+
+Folder mappings can also be set directly in VS Code `settings.json` under the
+`awesome-copilot.repositories` array. Each repository object accepts an optional
+`folderMappings` property:
+
+```json
+{
+  "awesome-copilot.repositories": [
+    {
+      "owner": "example",
+      "repo": "my-skills",
+      "folderMappings": {
+        "skills": "root",
+        "agents": null,
+        "instructions": null,
+        "plugins": null,
+        "prompts": null
+      }
+    }
+  ]
+}
+```
+
+#### `folderMappings` Property Reference
+
+| Property | Type | Description |
+|---|---|---|
+| `agents` | `string \| null` | Path to agents folder, `"root"`, or `null` to exclude |
+| `instructions` | `string \| null` | Path to instructions folder, `"root"`, or `null` to exclude |
+| `plugins` | `string \| null` | Path to plugins folder, `"root"`, or `null` to exclude |
+| `prompts` | `string \| null` | Path to prompts folder, `"root"`, or `null` to exclude |
+| `skills` | `string \| null` | Path to skills folder, `"root"`, or `null` to exclude |
+
+All properties are optional. Omitted properties use the default category path.
+
+### Examples
+
+**Repository with all prompts at its root:**
+
+```json
+{
+  "owner": "myorg",
+  "repo": "copilot-prompts",
+  "folderMappings": {
+    "prompts": "root"
+  }
+}
+```
+
+**Repository with a custom directory layout:**
+
+```json
+{
+  "owner": "myorg",
+  "repo": "copilot-config",
+  "folderMappings": {
+    "instructions": "copilot/instructions",
+    "prompts": "copilot/prompts",
+    "agents": "copilot/agents",
+    "plugins": null,
+    "skills": null
+  }
+}
+```
+
+**Standard repository (no `folderMappings` needed):**
+
+```json
+{
+  "owner": "github",
+  "repo": "awesome-copilot"
+}
+```
+
+## Configuration Reference
+
+All settings are under the `awesome-copilot` namespace and scoped to the application level.
+
+| Setting | Type | Default | Description |
+|---|---|---|---|
+| `repositories` | `array` | See [docs/configuration.md](docs/configuration.md) | GitHub repositories used as content sources. Each entry supports `owner`, `repo`, `label`, `baseUrl`, and `folderMappings`. |
+| `enterpriseToken` | `string` | `""` | Personal Access Token for GitHub Enterprise authentication. |
+| `cacheTimeout` | `number` | `3600000` | Cache duration in milliseconds (1 hour). Min 60000, max 86400000. |
+| `autoRefresh` | `boolean` | `false` | Automatically refresh content on VS Code startup. |
+| `showTreeView` | `boolean` | `true` | Show/hide the tree view in the Explorer panel. |
+| `allowInsecureEnterpriseCerts` | `boolean` | `false` | Allow insecure TLS certificates for Enterprise GitHub servers. |
+| `enableGithubAuth` | `boolean` | `true` | Enable GitHub OAuth to increase API rate limits (60 to 5,000 req/hr). |
+| `logLevel` | `string` | `"info"` | Log level: `error`, `warn`, `info`, `debug`, or `trace`. |
+| `checkForUpdates` | `boolean` | `true` | Check for updates to downloaded items and show notifications. |
+
+## Requirements
+
+- VS Code version 1.103.0 or higher
+- Internet connection to fetch repository data
+- A workspace folder open in VS Code (for downloads)
+
+## Extension Commands
+
+- `Refresh`: Update repository data from GitHub
+- `Download`: Save a file to your workspace
+- `Preview`: View file content in VS Code
+
+---
+
+## Development
+
+This extension was built with:
+
+- TypeScript
+- VS Code Extension API
+- Axios for HTTP requests
+- ESBuild for bundling
+
+### Building
+
+```bash
+npm install
+npm run compile
+```
+
+### Testing
+
+```bash
+npm run test
+```
+
+## UI Placement / Custom View Container
+
+The extension contributes a custom Activity Bar view container named **Awesome Copilot**. If you prefer to move or hide it:
+
+- Right-click the Activity Bar to toggle visibility.
+- Drag the view into a different location if desired (VS Code will persist your layout).
+
+If you previously dragged the old Explorer-based view into the Activity Bar and saw a generic label/icon, this update fixes that by supplying a dedicated container with themed icons (light/dark).
+
+**Enjoy browsing and using awesome GitHub Copilot customizations!**
+
+## License
+
+MIT
