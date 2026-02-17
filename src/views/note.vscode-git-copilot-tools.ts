@@ -1,7 +1,7 @@
 import * as path from 'path';
 import * as fs from 'fs';
 
-const TEMPLATE_PATH = path.join(__dirname, '..', 'src', 'views', 'note.vscode-git-copilot-tools-extension.md');
+const TEMPLATE_PATH = path.join(__dirname, '..', 'src', 'views', 'note.vscode-git-copilot-tools.md');
 const PLACEHOLDER = '| /SLASH-COMMAND-NOTE |';
 
 /**
@@ -35,7 +35,7 @@ function escapeRegExp(str: string): string {
 }
 
 /**
- * Generate the NOTE.VSCODE-AWESOME-COPILOT-EXTENSION.md content
+ * Generate the NOTE.VSCODE-VSCODE-GIT-COPILOT-TOOLS-EXTENSION.md content
  * from a plugin's README by extracting and remapping slash commands.
  */
 export function generateNoteContent(readmeContent: string, pluginName: string): string {
@@ -46,8 +46,8 @@ export function generateNoteContent(readmeContent: string, pluginName: string): 
     // In compiled output, __dirname is 'out/', template is at 'src/views/'
     // Try multiple paths for robustness
     const possiblePaths = [
-        path.join(__dirname, '..', 'src', 'views', 'note.vscode-git-copilot-tools-extension.md'),
-        path.join(__dirname, 'views', 'note.vscode-git-copilot-tools-extension.md'),
+        path.join(__dirname, '..', 'src', 'views', 'note.vscode-git-copilot-tools.md'),
+        path.join(__dirname, 'views', 'note.vscode-git-copilot-tools.md'),
     ];
 
     template = '';

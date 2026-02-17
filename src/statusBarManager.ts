@@ -11,7 +11,7 @@ export class StatusBarManager {
     constructor() {
         // Create status bar item with priority to position it appropriately
         this.statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
-        this.statusBarItem.command = 'awesome-copilot.showStatusHistory';
+        this.statusBarItem.command = 'vscode-git-copilot-tools.showStatusHistory';
     }
 
     /**

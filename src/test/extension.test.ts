@@ -5,7 +5,7 @@ import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { GitHubService } from '../githubService';
 import { CopilotCategory } from '../types';
-import { extractSlashCommands, generateNoteContent } from '../views/note.vscode-awesome-copilot-extension';
+import { extractSlashCommands, generateNoteContent } from '../views/note.vscode-git-copilot-tools';
 import * as logger from '../logger';
 
 suite('Extension Test Suite', () => {
@@ -24,13 +24,13 @@ suite('Extension Test Suite', () => {
     suiteSetup(async () => {
         (logger as any).getLogger = () => mockLogger;
         // Disable GitHub auth for tests to avoid hanging on auth dialog prompts
-        const config = vscode.workspace.getConfiguration('awesome-copilot');
+        const config = vscode.workspace.getConfiguration('vscode-git-copilot-tools');
         await config.update('enableGithubAuth', false, vscode.ConfigurationTarget.Global);
     });
 
     suiteTeardown(async () => {
         // Restore default auth setting
-        const config = vscode.workspace.getConfiguration('awesome-copilot');
+        const config = vscode.workspace.getConfiguration('vscode-git-copilot-tools');
         await config.update('enableGithubAuth', undefined, vscode.ConfigurationTarget.Global);
     });
 

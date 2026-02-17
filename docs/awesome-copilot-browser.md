@@ -6,7 +6,7 @@ A VS Code extension that provides an explorer view to browse, preview, and downl
 
 ## User Journey
 
-1. **Open Explorer View**: User opens the "Awesome Copilot" view in the VS Code Activity Bar
+1. **Open Explorer View**: User opens the "Git Copilot Tools" view in the VS Code Activity Bar
 2. **Browse Categories**: User sees five expandable sections: Plugins, Instructions, Prompts, Agents, and Skills
 3. **Search Content**: User types in search bar to filter items across all categories by filename in real-time
 4. **Preview Item**: User clicks on an item to see name and content preview
@@ -17,7 +17,7 @@ A VS Code extension that provides an explorer view to browse, preview, and downl
 ## Functional Requirements
 
 1. **FR-01**: Explorer View Integration
-   - **Description**: Display a new tree view in VS Code Activity Bar titled "Awesome Copilot"
+   - **Description**: Display a new tree view in VS Code Activity Bar titled "Git Copilot Tools"
    - **Acceptance Criteria**:
      - [x] Tree view appears in Activity Bar with a dedicated view container
      - [x] View shows five main categories: Plugins, Instructions, Prompts, Agents, and Skills

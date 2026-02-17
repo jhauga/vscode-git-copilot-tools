@@ -3,7 +3,7 @@ import * as crypto from 'crypto';
 import { CopilotItem, RepoSource } from './types';
 import { getLogger } from './logger';
 
-const DOWNLOADS_STORAGE_KEY = 'awesomeCopilot.downloads';
+const DOWNLOADS_STORAGE_KEY = 'vscodeGitCopilotTools.downloads';
 
 export interface DownloadMetadata {
     itemId: string;

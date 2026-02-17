@@ -9,7 +9,7 @@ let logger: Logger;
  * @param context VS Code extension context
  */
 export function initializeLogger(context: vscode.ExtensionContext): void {
-    logger = createLoggerWithConfigMonitoring('Awesome Copilot', 'awesome-copilot', 'logLevel', 'info', true, context);
+    logger = createLoggerWithConfigMonitoring('Git Copilot Tools', 'vscode-git-copilot-tools', 'logLevel', 'info', true, context);
     
     // Add to context disposables for cleanup
     context.subscriptions.push(logger);

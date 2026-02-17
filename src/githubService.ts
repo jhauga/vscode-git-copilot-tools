@@ -21,7 +21,7 @@ export class GitHubService {
 
     // Check if GitHub authentication is available and prompt if needed
     private async ensureGitHubAuth(isEnterprise: boolean = false): Promise<boolean> {
-        const config = vscode.workspace.getConfiguration('awesome-copilot');
+        const config = vscode.workspace.getConfiguration('vscode-git-copilot-tools');
         const enableAuth = config.get<boolean>('enableGithubAuth', true);
         
         if (!enableAuth) {
@@ -72,7 +72,7 @@ export class GitHubService {
     // Check if we have authentication available (silent check)
     private async checkAuthentication(): Promise<boolean> {
         try {
-            const config = vscode.workspace.getConfiguration('awesome-copilot');
+            const config = vscode.workspace.getConfiguration('vscode-git-copilot-tools');
             
             // Check for enterprise token
             const enterpriseToken = config.get<string>('enterpriseToken');
@@ -98,7 +98,7 @@ export class GitHubService {
         const statusCode = isAxiosError ? error.response?.status : undefined;
 
         if (statusCode === 401 || statusCode === 403) {
-            const config = vscode.workspace.getConfiguration('awesome-copilot');
+            const config = vscode.workspace.getConfiguration('vscode-git-copilot-tools');
             const enableAuth = config.get<boolean>('enableGithubAuth', true);
             
             if (!enableAuth) {
@@ -149,7 +149,7 @@ export class GitHubService {
     private createHttpsAgent(url: string): https.Agent | undefined {
         try {
             // Check security configuration
-            const config = vscode.workspace.getConfiguration('awesome-copilot');
+            const config = vscode.workspace.getConfiguration('vscode-git-copilot-tools');
             const allowInsecureEnterpriseCerts = config.get<boolean>('allowInsecureEnterpriseCerts', false);
 
             // If it's not github.com, treat as enterprise
@@ -181,13 +181,13 @@ export class GitHubService {
     // Create request headers with proper authentication for GitHub
     private async createRequestHeaders(isEnterprise: boolean = false): Promise<Record<string, string>> {
         const headers: Record<string, string> = {
-            'User-Agent': 'VSCode-AwesomeCopilot-Extension/1.0.0',
+            'User-Agent': 'VSCode-VscodeGitCopilotTools-Extension/1.0.0',
             'Accept': 'application/vnd.github+json',
             'X-GitHub-Api-Version': '2022-11-28'
         };
 
         // Try to authenticate for all GitHub requests (both public and enterprise)
-        const config = vscode.workspace.getConfiguration('awesome-copilot');
+        const config = vscode.workspace.getConfiguration('vscode-git-copilot-tools');
         const enableAuth = config.get<boolean>('enableGithubAuth', true);
         
         if (enableAuth) {
@@ -231,13 +231,13 @@ export class GitHubService {
     // Get files for a category from all sources, merged
     async getFiles(category: CopilotCategory, forceRefresh: boolean = false, context?: vscode.ExtensionContext): Promise<GitHubFile[]> {
         // Get sources from storage (context required for multi-repo)
-        let sources: RepoSource[] = [{ owner: 'github', repo: 'awesome-copilot', label: 'Awesome Copilot' }];
+        let sources: RepoSource[] = [{ owner: 'github', repo: 'awesome-copilot', label: 'Git Copilot Tools' }];
         if (context) {
             try { sources = RepoStorage.getSources(context); } catch { }
         }
         
         // Proactively check for authentication to avoid 403 errors
-        const config = vscode.workspace.getConfiguration('awesome-copilot');
+        const config = vscode.workspace.getConfiguration('vscode-git-copilot-tools');
         const enableAuth = config.get<boolean>('enableGithubAuth', true);
         
         if (enableAuth) {
@@ -290,7 +290,7 @@ export class GitHubService {
                 }
 
                 let response;
-                const config = vscode.workspace.getConfiguration('awesome-copilot');
+                const config = vscode.workspace.getConfiguration('vscode-git-copilot-tools');
                 const allowInsecureEnterpriseCerts = config.get<boolean>('allowInsecureEnterpriseCerts', false);
 
                 try {
@@ -421,7 +421,7 @@ export class GitHubService {
         }
 
         // Proactively check for authentication to avoid 403 errors (same as getFiles)
-        const config = vscode.workspace.getConfiguration('awesome-copilot');
+        const config = vscode.workspace.getConfiguration('vscode-git-copilot-tools');
         const enableAuth = config.get<boolean>('enableGithubAuth', true);
         const isEnterprise = !!repo.baseUrl;
 
@@ -570,7 +570,7 @@ export class GitHubService {
             }
 
             let response;
-            const config = vscode.workspace.getConfiguration('awesome-copilot');
+            const config = vscode.workspace.getConfiguration('vscode-git-copilot-tools');
             const allowInsecureEnterpriseCerts = config.get<boolean>('allowInsecureEnterpriseCerts', false);
 
             if (isEnterprise && allowInsecureEnterpriseCerts) {
@@ -625,7 +625,7 @@ export class GitHubService {
             }
 
             let response;
-            const config = vscode.workspace.getConfiguration('awesome-copilot');
+            const config = vscode.workspace.getConfiguration('vscode-git-copilot-tools');
             const allowInsecureEnterpriseCerts = config.get<boolean>('allowInsecureEnterpriseCerts', false);
 
             if (isEnterprise && allowInsecureEnterpriseCerts) {
@@ -764,7 +764,7 @@ export class GitHubService {
             }
 
             let response;
-            const config = vscode.workspace.getConfiguration('awesome-copilot');
+            const config = vscode.workspace.getConfiguration('vscode-git-copilot-tools');
             const allowInsecureEnterpriseCerts = config.get<boolean>('allowInsecureEnterpriseCerts', false);
 
             if (isEnterprise && allowInsecureEnterpriseCerts) {

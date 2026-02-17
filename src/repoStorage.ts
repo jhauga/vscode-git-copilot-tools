@@ -2,10 +2,10 @@ import * as vscode from 'vscode';
 import { RepoSource, FolderMapping } from './types';
 import { getLogger } from './logger';
 
-const STORAGE_KEY = 'awesomeCopilot.sources';
-const CONFIG_KEY = 'awesome-copilot.repositories';
+const STORAGE_KEY = 'vscodeGitCopilotTools.sources';
+const CONFIG_KEY = 'vscode-git-copilot-tools.repositories';
 const DEFAULT_SOURCES: RepoSource[] = [
-  { owner: 'github', repo: 'awesome-copilot', label: 'Awesome Copilot' }
+  { owner: 'github', repo: 'vscode-git-copilot-tools', label: 'Git Copilot Tools' }
 ];
 
 export class RepoStorage {

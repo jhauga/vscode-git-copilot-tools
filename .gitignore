@@ -1,0 +1,8 @@
+package-lock.json
+tmpclaude-*
+node_modules/
+.vscode-test.mjs
+.vscode-test/
+dist/
+out/
+*.code-workspace 

@@ -1,11 +1,11 @@
 # Awesome GitHub Copilot Browser
 
-A VS Code extension that allows you to browse, preview, and download GitHub Copilot customizations from the [awesome-copilot repository](https://github.com/github/awesome-copilot), and other repositories with VSCode Copilot `agent`, `instruction`, `plugin`, `prompt`, and `skill` tools. Slight variation of [timheuer/vscode-awesome-copilot](https://github.com/timheuer/vscode-awesome-copilot) VSCode extension.
+A VS Code extension that allows you to browse, preview, and download GitHub Copilot customizations from the [vscode-git-copilot-tools repository](https://github.com/github/vscode-git-copilot-tools), and other repositories with VSCode Copilot `agent`, `instruction`, `plugin`, `prompt`, and `skill` tools. Slight variation of [timheuer/vscode-vscode-git-copilot-tools](https://github.com/timheuer/vscode-vscode-git-copilot-tools) VSCode extension.
 
 ## Install in VS Code
 
-[![Install in VS Code](https://img.shields.io/badge/Install%20in-VS%20Code-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](vscode:extension/jhauga.awesome-copilot)
-[![Install in VS Code Insiders](https://img.shields.io/badge/Install%20in-VS%20Code%20Insiders-24bfa5?style=flat-square&logo=visualstudiocode&logoColor=white)](vscode-insiders:extension/jhauga.awesome-copilot)
+[![Install in VS Code](https://img.shields.io/badge/Install%20in-VS%20Code-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](vscode:extension/jhauga.vscode-git-copilot-tools)
+[![Install in VS Code Insiders](https://img.shields.io/badge/Install%20in-VS%20Code%20Insiders-24bfa5?style=flat-square&logo=visualstudiocode&logoColor=white)](vscode-insiders:extension/jhauga.vscode-git-copilot-tools)
 
 ## Features
 
@@ -22,7 +22,7 @@ A VS Code extension that allows you to browse, preview, and download GitHub Copi
 
 ## How to Use
 
-1. **Open the Extension**: Click the new Activity Bar icon (checkmark document) titled **Awesome Copilot**. (Previously this view appeared under Explorer; it now has its own dedicated container with a proper icon.)
+1. **Open the Extension**: Click the new Activity Bar icon (checkmark document) titled **Git Copilot Tools**. (Previously this view appeared under Explorer; it now has its own dedicated container with a proper icon.)
 2. **Search Files**: Use the search bar at the top to filter files across all categories in real-time
 3. **Browse Categories**: Expand Plugins, Instructions, Prompts, Agents, or Skills sections
 4. **Preview Content**: Click the preview icon on any file to see its content
@@ -76,12 +76,12 @@ The panel shows one input field per category. For each category you can enter:
 ### Manual Configuration via Settings
 
 Folder mappings can also be set directly in VS Code `settings.json` under the
-`awesome-copilot.repositories` array. Each repository object accepts an optional
+`vscode-git-copilot-tools.repositories` array. Each repository object accepts an optional
 `folderMappings` property:
 
 ```json
 {
-  "awesome-copilot.repositories": [
+  "vscode-git-copilot-tools.repositories": [
     {
       "owner": "example",
       "repo": "my-skills",
@@ -144,13 +144,13 @@ All properties are optional. Omitted properties use the default category path.
 ```json
 {
   "owner": "github",
-  "repo": "awesome-copilot"
+  "repo": "vscode-git-copilot-tools"
 }
 ```
 
 ## Configuration Reference
 
-All settings are under the `awesome-copilot` namespace and scoped to the application level.
+All settings are under the `vscode-git-copilot-tools` namespace and scoped to the application level.
 
 | Setting | Type | Default | Description |
 |---|---|---|---|
@@ -202,7 +202,7 @@ npm run test
 
 ## UI Placement / Custom View Container
 
-The extension contributes a custom Activity Bar view container named **Awesome Copilot**. If you prefer to move or hide it:
+The extension contributes a custom Activity Bar view container named **Git Copilot Tools**. If you prefer to move or hide it:
 
 - Right-click the Activity Bar to toggle visibility.
 - Drag the view into a different location if desired (VS Code will persist your layout).

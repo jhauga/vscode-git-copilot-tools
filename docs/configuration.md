@@ -1,14 +1,14 @@
 # Configuration Guide
 
 This document provides a comprehensive reference for all configuration options available in the
-Awesome Copilot (clone) VS Code extension.
+Git Copilot Tools VS Code extension.
 
 ## Extension Settings
 
-All settings live under the `awesome-copilot` namespace in VS Code settings. They are scoped to
+All settings live under the `vscode-git-copilot-tools` namespace in VS Code settings. They are scoped to
 the application level (global, not per-workspace).
 
-### `awesome-copilot.repositories`
+### `vscode-git-copilot-tools.repositories`
 
 **Type:** `array`
 **Default:**
@@ -17,8 +17,8 @@ the application level (global, not per-workspace).
 [
   {
     "owner": "github",
-    "repo": "awesome-copilot",
-    "label": "Awesome Copilot (clone)"
+    "repo": "vscode-git-copilot-tools",
+    "label": "Git Copilot Tools"
   }
 ]
 ```
@@ -63,10 +63,10 @@ Each property in `folderMappings` corresponds to a content category:
 
 ```json
 {
-  "awesome-copilot.repositories": [
+  "vscode-git-copilot-tools.repositories": [
     {
       "owner": "github",
-      "repo": "awesome-copilot"
+      "repo": "vscode-git-copilot-tools"
     }
   ]
 }
@@ -76,7 +76,7 @@ Each property in `folderMappings` corresponds to a content category:
 
 ```json
 {
-  "awesome-copilot.repositories": [
+  "vscode-git-copilot-tools.repositories": [
     {
       "owner": "myorg",
       "repo": "copilot-prompts",
@@ -92,7 +92,7 @@ Each property in `folderMappings` corresponds to a content category:
 
 ```json
 {
-  "awesome-copilot.repositories": [
+  "vscode-git-copilot-tools.repositories": [
     {
       "owner": "myorg",
       "repo": "copilot-config",
@@ -112,7 +112,7 @@ Each property in `folderMappings` corresponds to a content category:
 
 ```json
 {
-  "awesome-copilot.repositories": [
+  "vscode-git-copilot-tools.repositories": [
     {
       "owner": "team",
       "repo": "copilot-tools",
@@ -127,11 +127,11 @@ Each property in `folderMappings` corresponds to a content category:
 
 ```json
 {
-  "awesome-copilot.repositories": [
+  "vscode-git-copilot-tools.repositories": [
     {
       "owner": "github",
-      "repo": "awesome-copilot",
-      "label": "Awesome Copilot"
+      "repo": "vscode-git-copilot-tools",
+      "label": "Git Copilot Tools"
     },
     {
       "owner": "myorg",
@@ -147,7 +147,7 @@ Each property in `folderMappings` corresponds to a content category:
 
 ---
 
-### `awesome-copilot.enterpriseToken`
+### `vscode-git-copilot-tools.enterpriseToken`
 
 **Type:** `string`
 **Default:** `""`
@@ -161,7 +161,7 @@ Create a token at: `https://your-github-enterprise.com/settings/tokens`
 
 ---
 
-### `awesome-copilot.cacheTimeout`
+### `vscode-git-copilot-tools.cacheTimeout`
 
 **Type:** `number`
 **Default:** `3600000` (1 hour)
@@ -173,7 +173,7 @@ values provide fresher data but consume more API requests.
 
 ---
 
-### `awesome-copilot.autoRefresh`
+### `vscode-git-copilot-tools.autoRefresh`
 
 **Type:** `boolean`
 **Default:** `false`
@@ -183,17 +183,17 @@ on VS Code startup.
 
 ---
 
-### `awesome-copilot.showTreeView`
+### `vscode-git-copilot-tools.showTreeView`
 
 **Type:** `boolean`
 **Default:** `true`
 
-Show or hide the Awesome Copilot tree view in the Explorer panel. The Activity Bar view is
+Show or hide the Git Copilot Tools tree view in the Explorer panel. The Activity Bar view is
 always available.
 
 ---
 
-### `awesome-copilot.allowInsecureEnterpriseCerts`
+### `vscode-git-copilot-tools.allowInsecureEnterpriseCerts`
 
 **Type:** `boolean`
 **Default:** `false`
@@ -206,7 +206,7 @@ communicating with Enterprise GitHub servers. Public GitHub (github.com) is unaf
 
 ---
 
-### `awesome-copilot.enableGithubAuth`
+### `vscode-git-copilot-tools.enableGithubAuth`
 
 **Type:** `boolean`
 **Default:** `true`
@@ -218,7 +218,7 @@ The extension will prompt for sign-in when authentication is needed.
 
 ---
 
-### `awesome-copilot.logLevel`
+### `vscode-git-copilot-tools.logLevel`
 
 **Type:** `string`
 **Default:** `"info"`
@@ -236,7 +236,7 @@ Controls the verbosity of log output in the Output panel.
 
 ---
 
-### `awesome-copilot.checkForUpdates`
+### `vscode-git-copilot-tools.checkForUpdates`
 
 **Type:** `boolean`
 **Default:** `true`
@@ -276,5 +276,5 @@ input field per category.
 | `null` | Excludes this category (no content fetched, not shown in tree) |
 | Custom path | Fetches content from the specified folder within the repository |
 
-After saving, the mappings are persisted in the `awesome-copilot.repositories` setting and
+After saving, the mappings are persisted in the `vscode-git-copilot-tools.repositories` setting and
 applied on every subsequent data fetch.

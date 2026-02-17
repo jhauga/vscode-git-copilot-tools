@@ -1,7 +1,7 @@
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
-import { AwesomeCopilotProvider, AwesomeCopilotTreeItem } from './treeProvider';
+import { VscodeGitCopilotToolsProvider, VscodeGitCopilotToolsTreeItem } from './treeProvider';
 import { GitHubService } from './githubService';
 import { CopilotPreviewProvider } from './previewProvider';
 import { CopilotItem, FOLDER_PATHS, CopilotCategory, KIND_TO_CATEGORY, FolderMapping, RepoSource } from './types';
@@ -16,7 +16,7 @@ import axios from 'axios';
 import * as https from 'https';
 import { createLogger, createLoggerWithConfigMonitoring, Logger } from '@timheuer/vscode-ext-logger';
 import { initializeLogger, getLogger } from './logger';
-import { generateNoteContent } from './views/note.vscode-awesome-copilot-extension';
+import { generateNoteContent } from './views/note.vscode-git-copilot-tools';
 
 // Global logger instance
 let logger: Logger;
@@ -77,7 +77,7 @@ export async function activate(context: vscode.ExtensionContext) {
     logger.info('Extension initialized with secure TLS handling (SSL verification enabled)');
 
     // Debug: Test configuration reading on startup
-    const config = vscode.workspace.getConfiguration('awesome-copilot');
+    const config = vscode.workspace.getConfiguration('vscode-git-copilot-tools');
     const allowInsecureEnterpriseCerts = config.get<boolean>('allowInsecureEnterpriseCerts', false);
     logger.debug('allowInsecureEnterpriseCerts setting:', allowInsecureEnterpriseCerts);
     logger.trace('Configuration inspection:', config.inspect('allowInsecureEnterpriseCerts'));
@@ -85,7 +85,7 @@ export async function activate(context: vscode.ExtensionContext) {
     // Register manage sources command (UI entry point)
     // Static imports for ESM/TS compatibility
 
-    const manageSourcesDisposable = vscode.commands.registerCommand('awesome-copilot.manageSources', async () => {
+    const manageSourcesDisposable = vscode.commands.registerCommand('vscode-git-copilot-tools.manageSources', async () => {
         // Main quick pick menu
         let sources = RepoStorage.getSources(context);
         while (true) {
@@ -189,7 +189,7 @@ export async function activate(context: vscode.ExtensionContext) {
                         }
 
                         const headers: Record<string, string> = {
-                            'User-Agent': 'VSCode-AwesomeCopilot-Extension',
+                            'User-Agent': 'VSCode-VscodeGitCopilotTools-Extension',
                             'Accept': 'application/vnd.github.v3+json'
                         };
 
@@ -205,7 +205,7 @@ export async function activate(context: vscode.ExtensionContext) {
                             headers['Sec-Fetch-Site'] = 'same-origin';
 
                             // Priority 1: Check for configured enterprise token
-                            const config = vscode.workspace.getConfiguration('awesome-copilot');
+                            const config = vscode.workspace.getConfiguration('vscode-git-copilot-tools');
                             const enterpriseToken = config.get<string>('enterpriseToken');
 
                             if (enterpriseToken) {
@@ -231,7 +231,7 @@ export async function activate(context: vscode.ExtensionContext) {
                         }
 
                         // Enhanced SSL handling with security configuration
-                        const config = vscode.workspace.getConfiguration('awesome-copilot');
+                        const config = vscode.workspace.getConfiguration('vscode-git-copilot-tools');
                         const allowInsecureEnterpriseCerts = config.get<boolean>('allowInsecureEnterpriseCerts', false);
 
                         // Debug logging for SSL handling
@@ -454,7 +454,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
                         if (retryChoice === 'Configure Token') {
                             // Run the token configuration command
-                            await vscode.commands.executeCommand('awesome-copilot.configureEnterpriseToken');
+                            await vscode.commands.executeCommand('vscode-git-copilot-tools.configureEnterpriseToken');
                         } else if (retryChoice === 'Retry') {
                             // Let user try again in the main loop
                             continue;
@@ -469,7 +469,7 @@ export async function activate(context: vscode.ExtensionContext) {
                         );
 
                         if (retryChoice === 'Configure Token') {
-                            await vscode.commands.executeCommand('awesome-copilot.configureEnterpriseToken');
+                            await vscode.commands.executeCommand('vscode-git-copilot-tools.configureEnterpriseToken');
                         } else if (retryChoice === 'Retry') {
                             continue;
                         }
@@ -520,7 +520,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	const statusBarManager = new StatusBarManager();
 	const githubService = new GitHubService(statusBarManager);
 	const downloadTracker = new DownloadTracker(context);
-	const treeProvider = new AwesomeCopilotProvider(githubService, context, downloadTracker);
+	const treeProvider = new VscodeGitCopilotToolsProvider(githubService, context, downloadTracker);
 	const previewProvider = new CopilotPreviewProvider();
 
     // Initialize repository sources from settings
@@ -535,7 +535,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	// Register search webview provider for Activity Bar view
 	const searchViewProvider = new SearchViewProvider(context.extensionUri, treeProvider.getSearchBar());
-	const searchView = vscode.window.registerWebviewViewProvider('awesomeCopilotSearch', searchViewProvider, {
+	const searchView = vscode.window.registerWebviewViewProvider('vscodeGitCopilotToolsSearch', searchViewProvider, {
 		webviewOptions: {
 			retainContextWhenHidden: true
 		}
@@ -543,20 +543,20 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	// Register search webview provider for File Explorer view (shares same SearchBar)
 	const searchViewProviderSecondary = new SearchViewProvider(context.extensionUri, treeProvider.getSearchBar());
-	const searchViewSecondary = vscode.window.registerWebviewViewProvider('awesomeCopilotSearchSecondary', searchViewProviderSecondary, {
+	const searchViewSecondary = vscode.window.registerWebviewViewProvider('vscodeGitCopilotToolsSearchSecondary', searchViewProviderSecondary, {
 		webviewOptions: {
 			retainContextWhenHidden: true
 		}
 	});
 
 	// Register providers - both views share the same data provider instance
-	const treeView = vscode.window.createTreeView('awesomeCopilotExplorer', {
+	const treeView = vscode.window.createTreeView('vscodeGitCopilotToolsExplorer', {
 		treeDataProvider: treeProvider,
 		showCollapseAll: true
 	});
 
 	// Register secondary view in explorer (shares same data provider)
-	const treeViewSecondary = vscode.window.createTreeView('awesomeCopilotExplorerSecondary', {
+	const treeViewSecondary = vscode.window.createTreeView('vscodeGitCopilotToolsExplorerSecondary', {
 		treeDataProvider: treeProvider,
 		showCollapseAll: true
 	});
@@ -584,13 +584,13 @@ export async function activate(context: vscode.ExtensionContext) {
     // The commandId parameter must match the command field in package.json
 
     // Register refresh command
-    const refreshDisposable = vscode.commands.registerCommand('awesome-copilot.refreshAwesomeCopilot', () => {
+    const refreshDisposable = vscode.commands.registerCommand('vscode-git-copilot-tools.refreshVscodeGitCopilotTools', () => {
         treeProvider.refresh();
-        statusBarManager.showSuccess('Refreshed Awesome Copilot data');
+        statusBarManager.showSuccess('Refreshed Git Copilot Tools data');
     });
 
 	// Register download command
-	const downloadDisposable = vscode.commands.registerCommand('awesome-copilot.downloadItem', async (treeItem?: AwesomeCopilotTreeItem) => {
+	const downloadDisposable = vscode.commands.registerCommand('vscode-git-copilot-tools.downloadItem', async (treeItem?: VscodeGitCopilotToolsTreeItem) => {
 		if (!treeItem || !treeItem.copilotItem) {
 			vscode.window.showErrorMessage('No file selected for download');
 			return;
@@ -599,7 +599,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	});
 
     // Register preview command
-    const previewDisposable = vscode.commands.registerCommand('awesome-copilot.previewItem', async (treeItem?: AwesomeCopilotTreeItem) => {
+    const previewDisposable = vscode.commands.registerCommand('vscode-git-copilot-tools.previewItem', async (treeItem?: VscodeGitCopilotToolsTreeItem) => {
         if (!treeItem || !treeItem.copilotItem) {
             vscode.window.showErrorMessage('No file selected for preview');
             return;
@@ -608,7 +608,7 @@ export async function activate(context: vscode.ExtensionContext) {
     });
 
     // Register repository-specific commands
-    const removeRepoDisposable = vscode.commands.registerCommand('awesome-copilot.removeRepo', async (treeItem?: AwesomeCopilotTreeItem) => {
+    const removeRepoDisposable = vscode.commands.registerCommand('vscode-git-copilot-tools.removeRepo', async (treeItem?: VscodeGitCopilotToolsTreeItem) => {
         // Validate that we have a tree item with the required properties
         if (!treeItem) {
             vscode.window.showErrorMessage('No repository selected for removal');
@@ -644,7 +644,7 @@ export async function activate(context: vscode.ExtensionContext) {
         }
     });
 
-    const refreshRepoDisposable = vscode.commands.registerCommand('awesome-copilot.refreshRepo', async (treeItem?: AwesomeCopilotTreeItem) => {
+    const refreshRepoDisposable = vscode.commands.registerCommand('vscode-git-copilot-tools.refreshRepo', async (treeItem?: VscodeGitCopilotToolsTreeItem) => {
         // Validate that we have a tree item with the required properties
         if (!treeItem) {
             vscode.window.showErrorMessage('No repository selected for refresh');
@@ -665,7 +665,7 @@ export async function activate(context: vscode.ExtensionContext) {
     });
 
     // Register token configuration command
-    const configTokenDisposable = vscode.commands.registerCommand('awesome-copilot.configureEnterpriseToken', async () => {
+    const configTokenDisposable = vscode.commands.registerCommand('vscode-git-copilot-tools.configureEnterpriseToken', async () => {
         const token = await vscode.window.showInputBox({
             prompt: 'Enter your Enterprise GitHub Personal Access Token',
             password: true,
@@ -683,14 +683,14 @@ export async function activate(context: vscode.ExtensionContext) {
         });
 
         if (token) {
-            const config = vscode.workspace.getConfiguration('awesome-copilot');
+            const config = vscode.workspace.getConfiguration('vscode-git-copilot-tools');
             await config.update('enterpriseToken', token, vscode.ConfigurationTarget.Global);
             statusBarManager.showSuccess('Enterprise GitHub token configured successfully!');
         }
     });
 
     // Register clear token command
-    const clearTokenDisposable = vscode.commands.registerCommand('awesome-copilot.clearEnterpriseToken', async () => {
+    const clearTokenDisposable = vscode.commands.registerCommand('vscode-git-copilot-tools.clearEnterpriseToken', async () => {
         const confirm = await vscode.window.showWarningMessage(
             'Clear Enterprise GitHub token?',
             { modal: true },
@@ -698,7 +698,7 @@ export async function activate(context: vscode.ExtensionContext) {
         );
 
         if (confirm === 'Clear') {
-            const config = vscode.workspace.getConfiguration('awesome-copilot');
+            const config = vscode.workspace.getConfiguration('vscode-git-copilot-tools');
             await config.update('enterpriseToken', undefined, vscode.ConfigurationTarget.Global);
             statusBarManager.showSuccess('Enterprise GitHub token cleared');
         }
@@ -706,28 +706,28 @@ export async function activate(context: vscode.ExtensionContext) {
 
 
     // Register tree view visibility commands
-    const toggleTreeViewDisposable = vscode.commands.registerCommand('awesome-copilot.toggleTreeView', async () => {
-        const config = vscode.workspace.getConfiguration('awesome-copilot');
+    const toggleTreeViewDisposable = vscode.commands.registerCommand('vscode-git-copilot-tools.toggleTreeView', async () => {
+        const config = vscode.workspace.getConfiguration('vscode-git-copilot-tools');
         const currentValue = config.get<boolean>('showTreeView', true);
         await config.update('showTreeView', !currentValue, vscode.ConfigurationTarget.Global);
         const newState = !currentValue ? 'shown' : 'hidden';
-        statusBarManager.showInfo(`Awesome Copilot tree view ${newState}`);
+        statusBarManager.showInfo(`Git Copilot Tools tree view ${newState}`);
     });
 
-    const showTreeViewDisposable = vscode.commands.registerCommand('awesome-copilot.showTreeView', async () => {
-        const config = vscode.workspace.getConfiguration('awesome-copilot');
+    const showTreeViewDisposable = vscode.commands.registerCommand('vscode-git-copilot-tools.showTreeView', async () => {
+        const config = vscode.workspace.getConfiguration('vscode-git-copilot-tools');
         await config.update('showTreeView', true, vscode.ConfigurationTarget.Global);
-        statusBarManager.showInfo('Awesome Copilot tree view shown');
+        statusBarManager.showInfo('Git Copilot Tools tree view shown');
     });
 
-    const hideTreeViewDisposable = vscode.commands.registerCommand('awesome-copilot.hideTreeView', async () => {
-        const config = vscode.workspace.getConfiguration('awesome-copilot');
+    const hideTreeViewDisposable = vscode.commands.registerCommand('vscode-git-copilot-tools.hideTreeView', async () => {
+        const config = vscode.workspace.getConfiguration('vscode-git-copilot-tools');
         await config.update('showTreeView', false, vscode.ConfigurationTarget.Global);
-        statusBarManager.showInfo('Awesome Copilot tree view hidden');
+        statusBarManager.showInfo('Git Copilot Tools tree view hidden');
     });
 
     // Register GitHub authentication commands
-    const signInToGitHubDisposable = vscode.commands.registerCommand('awesome-copilot.signInToGitHub', async () => {
+    const signInToGitHubDisposable = vscode.commands.registerCommand('vscode-git-copilot-tools.signInToGitHub', async () => {
         try {
             const session = await vscode.authentication.getSession('github', ['repo'], {
                 createIfNone: true
@@ -744,7 +744,7 @@ export async function activate(context: vscode.ExtensionContext) {
         }
     });
 
-    const signOutFromGitHubDisposable = vscode.commands.registerCommand('awesome-copilot.signOutFromGitHub', async () => {
+    const signOutFromGitHubDisposable = vscode.commands.registerCommand('vscode-git-copilot-tools.signOutFromGitHub', async () => {
         try {
             // Try to get current session
             const session = await vscode.authentication.getSession('github', ['repo'], {
@@ -774,7 +774,7 @@ export async function activate(context: vscode.ExtensionContext) {
     });
 
     // Register command to open repository in browser
-    const openRepoInBrowserDisposable = vscode.commands.registerCommand('awesome-copilot.openRepoInBrowser', async (treeItem?: AwesomeCopilotTreeItem) => {
+    const openRepoInBrowserDisposable = vscode.commands.registerCommand('vscode-git-copilot-tools.openRepoInBrowser', async (treeItem?: VscodeGitCopilotToolsTreeItem) => {
         // If called with a specific tree item (from inline context menu), use that repo
         if (treeItem && treeItem.itemType === 'repo' && treeItem.repo) {
             const repo = treeItem.repo;
@@ -1048,11 +1048,11 @@ async function downloadCopilotItem(item: CopilotItem, githubService: GitHubServi
                     }
                 }
 
-                // Generate NOTE.VSCODE-AWESOME-COPILOT-EXTENSION.md with slash command mappings
+                // Generate NOTE.VSCODE-VSCODE-GIT-COPILOT-TOOLS-EXTENSION.md with slash command mappings
                 const pluginName = metadata.id || item.name;
                 const noteContent = generateNoteContent(readmeContent, pluginName);
                 fs.writeFileSync(
-                    path.join(pluginDir, 'NOTE.VSCODE-AWESOME-COPILOT-EXTENSION.md'),
+                    path.join(pluginDir, 'NOTE.VSCODE-VSCODE-GIT-COPILOT-TOOLS-EXTENSION.md'),
                     noteContent,
                     'utf8'
                 );

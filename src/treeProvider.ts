@@ -14,7 +14,7 @@ class RemoteContentProvider implements vscode.TextDocumentContentProvider {
 }
 import { SearchBar } from './searchBar';
 
-export class AwesomeCopilotTreeItem extends vscode.TreeItem {
+export class VscodeGitCopilotToolsTreeItem extends vscode.TreeItem {
     public readonly copilotItem?: CopilotItem;
     public readonly category?: CopilotCategory;
     public readonly repo?: RepoSource;
@@ -39,7 +39,7 @@ export class AwesomeCopilotTreeItem extends vscode.TreeItem {
             this.contextValue = 'copilotSearch';
             this.iconPath = new vscode.ThemeIcon('search');
             this.command = {
-                command: 'awesome-copilot.searchFiles',
+                command: 'vscode-git-copilot-tools.searchFiles',
                 title: 'Search Files'
             };
             this.description = '';
@@ -127,9 +127,9 @@ export class AwesomeCopilotTreeItem extends vscode.TreeItem {
     }
 }
 
-export class AwesomeCopilotProvider implements vscode.TreeDataProvider<AwesomeCopilotTreeItem> {
-    private _onDidChangeTreeData: vscode.EventEmitter<AwesomeCopilotTreeItem | undefined | null | void> = new vscode.EventEmitter<AwesomeCopilotTreeItem | undefined | null | void>();
-    readonly onDidChangeTreeData: vscode.Event<AwesomeCopilotTreeItem | undefined | null | void> = this._onDidChangeTreeData.event;
+export class VscodeGitCopilotToolsProvider implements vscode.TreeDataProvider<VscodeGitCopilotToolsTreeItem> {
+    private _onDidChangeTreeData: vscode.EventEmitter<VscodeGitCopilotToolsTreeItem | undefined | null | void> = new vscode.EventEmitter<VscodeGitCopilotToolsTreeItem | undefined | null | void>();
+    readonly onDidChangeTreeData: vscode.Event<VscodeGitCopilotToolsTreeItem | undefined | null | void> = this._onDidChangeTreeData.event;
 
     private repoItems: Map<string, Map<CopilotCategory, CopilotItem[]>> = new Map();
     private loading: Set<string> = new Set();
@@ -182,12 +182,12 @@ export class AwesomeCopilotProvider implements vscode.TreeDataProvider<AwesomeCo
         loadingKeysToDelete.forEach(key => this.loading.delete(key));
 
         // Find the tree item for this repository
-        const repos = this.context ? RepoStorage.getSources(this.context) : [{ owner: 'github', repo: 'awesome-copilot', label: 'Awesome Copilot' }];
+        const repos = this.context ? RepoStorage.getSources(this.context) : [{ owner: 'github', repo: 'vscode-git-copilot-tools', label: 'Git Copilot Tools' }];
         const targetRepo = repos.find(r => r.owner === repo.owner && r.repo === repo.repo && (r.baseUrl || 'github.com') === (repo.baseUrl || 'github.com'));
         
         if (targetRepo) {
             // Create the tree item for this repo
-            const repoTreeItem = new AwesomeCopilotTreeItem(
+            const repoTreeItem = new VscodeGitCopilotToolsTreeItem(
                 targetRepo.label || `${targetRepo.owner}/${targetRepo.repo}`,
                 vscode.TreeItemCollapsibleState.Expanded,
                 'repo',
@@ -261,16 +261,16 @@ export class AwesomeCopilotProvider implements vscode.TreeDataProvider<AwesomeCo
         await this.checkForUpdates(allItems);
     }
 
-    getTreeItem(element: AwesomeCopilotTreeItem): vscode.TreeItem {
+    getTreeItem(element: VscodeGitCopilotToolsTreeItem): vscode.TreeItem {
         return element;
     }
 
-    async getChildren(element?: AwesomeCopilotTreeItem): Promise<AwesomeCopilotTreeItem[]> {
+    async getChildren(element?: VscodeGitCopilotToolsTreeItem): Promise<VscodeGitCopilotToolsTreeItem[]> {
         if (!element) {
             // Return root repositories
-            const repos = this.context ? RepoStorage.getSources(this.context) : [{ owner: 'github', repo: 'awesome-copilot', label: 'Awesome Copilot' }];
+            const repos = this.context ? RepoStorage.getSources(this.context) : [{ owner: 'github', repo: 'vscode-git-copilot-tools', label: 'Git Copilot Tools' }];
             return repos.map(repo =>
-                new AwesomeCopilotTreeItem(
+                new VscodeGitCopilotToolsTreeItem(
                     repo.label || `${repo.owner}/${repo.repo}`,
                     vscode.TreeItemCollapsibleState.Expanded,
                     'repo',
@@ -284,7 +284,7 @@ export class AwesomeCopilotProvider implements vscode.TreeDataProvider<AwesomeCo
         if (element.itemType === 'repo' && element.repo) {
             // Return categories for this repository
             return [
-                new AwesomeCopilotTreeItem(
+                new VscodeGitCopilotToolsTreeItem(
                     CATEGORY_LABELS[CopilotCategory.Plugins],
                     vscode.TreeItemCollapsibleState.Collapsed,
                     'category',
@@ -292,7 +292,7 @@ export class AwesomeCopilotProvider implements vscode.TreeDataProvider<AwesomeCo
                     CopilotCategory.Plugins,
                     element.repo
                 ),
-                new AwesomeCopilotTreeItem(
+                new VscodeGitCopilotToolsTreeItem(
                     CATEGORY_LABELS[CopilotCategory.Instructions],
                     vscode.TreeItemCollapsibleState.Collapsed,
                     'category',
@@ -300,7 +300,7 @@ export class AwesomeCopilotProvider implements vscode.TreeDataProvider<AwesomeCo
                     CopilotCategory.Instructions,
                     element.repo
                 ),
-                new AwesomeCopilotTreeItem(
+                new VscodeGitCopilotToolsTreeItem(
                     CATEGORY_LABELS[CopilotCategory.Prompts],
                     vscode.TreeItemCollapsibleState.Collapsed,
                     'category',
@@ -308,7 +308,7 @@ export class AwesomeCopilotProvider implements vscode.TreeDataProvider<AwesomeCo
                     CopilotCategory.Prompts,
                     element.repo
                 ),
-                new AwesomeCopilotTreeItem(
+                new VscodeGitCopilotToolsTreeItem(
                     CATEGORY_LABELS[CopilotCategory.Agents],
                     vscode.TreeItemCollapsibleState.Collapsed,
                     'category',
@@ -316,7 +316,7 @@ export class AwesomeCopilotProvider implements vscode.TreeDataProvider<AwesomeCo
                     CopilotCategory.Agents,
                     element.repo
                 ),
-                new AwesomeCopilotTreeItem(
+                new VscodeGitCopilotToolsTreeItem(
                     CATEGORY_LABELS[CopilotCategory.Skills],
                     vscode.TreeItemCollapsibleState.Collapsed,
                     'category',
@@ -335,7 +335,7 @@ export class AwesomeCopilotProvider implements vscode.TreeDataProvider<AwesomeCo
             const filteredItems = this.searchBar.filterItems(items);
 
             return filteredItems.map(item =>
-                new AwesomeCopilotTreeItem(
+                new VscodeGitCopilotToolsTreeItem(
                     item.name,
                     vscode.TreeItemCollapsibleState.None,
                     'file',
@@ -452,7 +452,7 @@ export class AwesomeCopilotProvider implements vscode.TreeDataProvider<AwesomeCo
 
     private async checkForUpdates(allItems: CopilotItem[]): Promise<void> {
         // Check if update checking is enabled
-        const config = vscode.workspace.getConfiguration('awesome-copilot');
+        const config = vscode.workspace.getConfiguration('vscode-git-copilot-tools');
         const checkForUpdates = config.get<boolean>('checkForUpdates', true);
 
         if (!checkForUpdates || !this.downloadTracker) {
@@ -555,7 +555,7 @@ export class AwesomeCopilotProvider implements vscode.TreeDataProvider<AwesomeCo
 
                 if (action.value === 'download') {
                     // Create a tree item wrapper to trigger the download command
-                    const treeItem = new AwesomeCopilotTreeItem(
+                    const treeItem = new VscodeGitCopilotToolsTreeItem(
                         item.name,
                         vscode.TreeItemCollapsibleState.None,
                         'file',
@@ -565,7 +565,7 @@ export class AwesomeCopilotProvider implements vscode.TreeDataProvider<AwesomeCo
                     );
 
                     // Execute the download command
-                    await vscode.commands.executeCommand('awesome-copilot.downloadItem', treeItem);
+                    await vscode.commands.executeCommand('vscode-git-copilot-tools.downloadItem', treeItem);
                     continueLoop = false; // Exit after download
                 } else if (action.value === 'diff') {
                     await this.showDiff(item);

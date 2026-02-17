@@ -1,9 +1,9 @@
 {
-  "name": "awesome-copilot",
-  "displayName": "Awesome Copilot (clone)",
+  "name": "vscode-git-copilot-tools",
+  "displayName": "Git Copilot Tools",
   "publisher": "jhauga",
   "author": {
-    "name": "Tim Heuer"
+    "name": "John Haugabook"
   },
   "bugs": {
     "url": "https://github.com/jhauga/vscode-git-copilot-tools/issues"
@@ -14,38 +14,38 @@
   },
   "qna": "https://github.com/jhauga/vscode-git-copilot-tools/issues",
   "homepage": "https://github.com/jhauga/vscode-git-copilot-tools",
-  "description": "Browse and download instructions, prompts, plugins, and agents from the Awesome Copilot community. Clone of jhauga/vscode-git-copilot-tools.",
+  "description": "Browse and download instructions, prompts, plugins, and agents from the Git Copilot Tools community. Clone of jhauga/vscode-git-copilot-tools.",
   "version": "0.1.40-fork.2",
   "icon": "icon.png",
   "engines": {
     "vscode": "^1.103.0"
   },
   "activationEvents": [
-    "onView:awesomeCopilotExplorer"
+    "onView:vscodeGitCopilotToolsExplorer"
   ],
   "main": "./dist/extension.js",
   "contributes": {
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "awesomeCopilot",
-          "title": "Awesome Copilot (clone)",
-          "icon": "resources/awesome-copilot.svg"
+          "id": "vscodeGitCopilotTools",
+          "title": "Git Copilot Tools",
+          "icon": "resources/vscode-git-copilot-tools.svg"
         }
       ]
     },
     "configuration": {
-      "title": "Awesome Copilot (clone)",
+      "title": "Git Copilot Tools",
       "properties": {
-        "awesome-copilot.repositories": {
+        "vscode-git-copilot-tools.repositories": {
           "type": "array",
           "title": "Repositories",
           "description": "Configure GitHub repositories as content sources",
           "default": [
             {
               "owner": "github",
-              "repo": "awesome-copilot",
-              "label": "Awesome Copilot (clone)"
+              "repo": "vscode-git-copilot-tools",
+              "label": "Git Copilot Tools"
             }
           ],
           "items": {
@@ -82,14 +82,14 @@
           },
           "scope": "application"
         },
-        "awesome-copilot.enterpriseToken": {
+        "vscode-git-copilot-tools.enterpriseToken": {
           "type": "string",
           "default": "",
           "description": "Personal Access Token for GitHub Enterprise authentication",
           "scope": "application",
           "markdownDescription": "Required permissions: `repo`, `read:org`, `read:user`  \nCreate at: your-github-enterprise.com/settings/tokens"
         },
-        "awesome-copilot.cacheTimeout": {
+        "vscode-git-copilot-tools.cacheTimeout": {
           "type": "number",
           "default": 3600000,
           "minimum": 60000,
@@ -97,26 +97,26 @@
           "description": "Cache duration in milliseconds (default: 1 hour)",
           "scope": "application"
         },
-        "awesome-copilot.autoRefresh": {
+        "vscode-git-copilot-tools.autoRefresh": {
           "type": "boolean",
           "default": false,
           "description": "Automatically refresh content on VS Code startup",
           "scope": "application"
         },
-        "awesome-copilot.showTreeView": {
+        "vscode-git-copilot-tools.showTreeView": {
           "type": "boolean",
           "default": true,
-          "description": "Show/hide the Awesome Copilot tree view in the Explorer panel",
+          "description": "Show/hide the Git Copilot Tools tree view in the Explorer panel",
           "scope": "application"
         },
-        "awesome-copilot.allowInsecureEnterpriseCerts": {
+        "vscode-git-copilot-tools.allowInsecureEnterpriseCerts": {
           "type": "boolean",
           "default": false,
           "description": "⚠️ SECURITY WARNING: Allow insecure certificates for Enterprise GitHub servers. Only enable this for trusted enterprise environments with self-signed certificates.",
           "scope": "application",
           "markdownDescription": "**⚠️ SECURITY WARNING:** This setting disables TLS certificate validation for Enterprise GitHub servers only. Only enable for trusted enterprise environments with self-signed certificates.  \n\n**Default: `false` (secure)**  \n\n**Note:** If you're getting certificate errors with enterprise GitHub, enable this temporarily to add your repository, then you can disable it again for better security."
         },
-        "awesome-copilot.enableGithubAuth": {
+        "vscode-git-copilot-tools.enableGithubAuth": {
           "type": "boolean",
           "default": true,
           "description": "Enable GitHub authentication via VS Code to increase rate limits from 60 to 5,000 requests per hour",
@@ -124,7 +124,7 @@
           "title": "Enable GitHub Authentication",
           "markdownDescription": "**Enable GitHub Authentication**  \n\nWhen enabled, the extension will use VS Code's GitHub authentication to access the API with higher rate limits:  \n- **Authenticated:** 5,000 requests/hour  \n- **Unauthenticated:** 60 requests/hour  \n\nThe extension will prompt you to sign in when needed."
         },
-        "awesome-copilot.logLevel": {
+        "vscode-git-copilot-tools.logLevel": {
           "type": "string",
           "enum": [
             "error",
@@ -141,11 +141,11 @@
             "Show all logging including trace information"
           ],
           "default": "info",
-          "description": "Set the logging level for the Awesome Copilot extension",
+          "description": "Set the logging level for the Git Copilot Tools extension",
           "scope": "application",
           "title": "Log Level"
         },
-        "awesome-copilot.checkForUpdates": {
+        "vscode-git-copilot-tools.checkForUpdates": {
           "type": "boolean",
           "default": true,
           "description": "Check for updates to downloaded items and notify when newer versions are available",
@@ -155,168 +155,168 @@
     },
     "commands": [
       {
-        "command": "awesome-copilot.refreshAwesomeCopilot",
+        "command": "vscode-git-copilot-tools.refreshVscodeGitCopilotTools",
         "title": "Refresh",
         "icon": "$(refresh)"
       },
       {
-        "command": "awesome-copilot.downloadItem",
+        "command": "vscode-git-copilot-tools.downloadItem",
         "title": "Download",
         "icon": "$(cloud-download)"
       },
       {
-        "command": "awesome-copilot.previewItem",
+        "command": "vscode-git-copilot-tools.previewItem",
         "title": "Preview",
         "icon": "$(open-preview)"
       },
       {
-        "command": "awesome-copilot.manageSources",
-        "title": "Awesome Copilot: Manage Sources",
+        "command": "vscode-git-copilot-tools.manageSources",
+        "title": "Git Copilot Tools: Manage Sources",
         "icon": "$(repo)"
       },
       {
-        "command": "awesome-copilot.removeRepo",
+        "command": "vscode-git-copilot-tools.removeRepo",
         "title": "Remove Repository",
         "icon": "$(trash)"
       },
       {
-        "command": "awesome-copilot.refreshRepo",
+        "command": "vscode-git-copilot-tools.refreshRepo",
         "title": "Refresh Repository",
         "icon": "$(refresh)"
       },
       {
-        "command": "awesome-copilot.configureEnterpriseToken",
-        "title": "Awesome Copilot: Configure Enterprise Token",
+        "command": "vscode-git-copilot-tools.configureEnterpriseToken",
+        "title": "Git Copilot Tools: Configure Enterprise Token",
         "icon": "$(key)"
       },
       {
-        "command": "awesome-copilot.clearEnterpriseToken",
-        "title": "Awesome Copilot: Clear Enterprise Token",
+        "command": "vscode-git-copilot-tools.clearEnterpriseToken",
+        "title": "Git Copilot Tools: Clear Enterprise Token",
         "icon": "$(trash)"
       },
       {
-        "command": "awesome-copilot.toggleTreeView",
-        "title": "Awesome Copilot: Toggle Tree View",
+        "command": "vscode-git-copilot-tools.toggleTreeView",
+        "title": "Git Copilot Tools: Toggle Tree View",
         "icon": "$(eye)"
       },
       {
-        "command": "awesome-copilot.showTreeView",
-        "title": "Awesome Copilot: Show Tree View",
+        "command": "vscode-git-copilot-tools.showTreeView",
+        "title": "Git Copilot Tools: Show Tree View",
         "icon": "$(eye)"
       },
       {
-        "command": "awesome-copilot.hideTreeView",
-        "title": "Awesome Copilot: Hide Tree View",
+        "command": "vscode-git-copilot-tools.hideTreeView",
+        "title": "Git Copilot Tools: Hide Tree View",
         "icon": "$(eye-closed)"
       },
       {
-        "command": "awesome-copilot.signInToGitHub",
-        "title": "Awesome Copilot: Sign in to GitHub",
+        "command": "vscode-git-copilot-tools.signInToGitHub",
+        "title": "Git Copilot Tools: Sign in to GitHub",
         "icon": "$(github)"
       },
       {
-        "command": "awesome-copilot.signOutFromGitHub",
-        "title": "Awesome Copilot: Sign out from GitHub",
+        "command": "vscode-git-copilot-tools.signOutFromGitHub",
+        "title": "Git Copilot Tools: Sign out from GitHub",
         "icon": "$(sign-out)"
       },
       {
-        "command": "awesome-copilot.openRepoInBrowser",
+        "command": "vscode-git-copilot-tools.openRepoInBrowser",
         "title": "Open Repository in Browser",
         "icon": "$(github)"
       },
       {
-        "command": "awesome-copilot.searchFiles",
+        "command": "vscode-git-copilot-tools.searchFiles",
         "title": "Search/Filter Files",
         "icon": "$(search)"
       },
       {
-        "command": "awesome-copilot.clearSearch",
+        "command": "vscode-git-copilot-tools.clearSearch",
         "title": "Clear Search Filter",
         "icon": "$(clear-all)"
       }
     ],
     "views": {
-      "awesomeCopilot": [
+      "vscodeGitCopilotTools": [
         {
           "type": "webview",
-          "id": "awesomeCopilotSearch",
-          "name": "Search Awesome Copilot",
+          "id": "vscodeGitCopilotToolsSearch",
+          "name": "Search Git Copilot Tools",
           "icon": "$(search)",
           "visibility": "visible"
         },
         {
-          "id": "awesomeCopilotExplorer",
-          "name": "GitHub / awesome-copilot",
+          "id": "vscodeGitCopilotToolsExplorer",
+          "name": "GitHub / vscode-git-copilot-tools",
           "icon": "icon.png"
         }
       ],
       "explorer": [
         {
           "type": "webview",
-          "id": "awesomeCopilotSearchSecondary",
-          "name": "Search Awesome Copilot",
+          "id": "vscodeGitCopilotToolsSearchSecondary",
+          "name": "Search Git Copilot Tools",
           "icon": "$(search)",
           "visibility": "visible"
         },
         {
-          "id": "awesomeCopilotExplorerSecondary",
-          "name": "Awesome Copilot (clone)",
+          "id": "vscodeGitCopilotToolsExplorerSecondary",
+          "name": "Git Copilot Tools",
           "icon": "$(list-tree)"
         }
       ]
     },
     "viewsWelcome": [
       {
-        "view": "awesomeCopilotExplorer",
-        "contents": "No repositories configured.\n[Manage Sources](command:awesome-copilot.manageSources)\nBrowse and download instructions, prompts, plugins, and agents from the Awesome Copilot community."
+        "view": "vscodeGitCopilotToolsExplorer",
+        "contents": "No repositories configured.\n[Manage Sources](command:vscode-git-copilot-tools.manageSources)\nBrowse and download instructions, prompts, plugins, and agents from the Git Copilot Tools community."
       },
       {
-        "view": "awesomeCopilotExplorerSecondary",
-        "contents": "No repositories configured.\n[Manage Sources](command:awesome-copilot.manageSources)\nBrowse and download instructions, prompts, plugins, and agents from the Awesome Copilot community."
+        "view": "vscodeGitCopilotToolsExplorerSecondary",
+        "contents": "No repositories configured.\n[Manage Sources](command:vscode-git-copilot-tools.manageSources)\nBrowse and download instructions, prompts, plugins, and agents from the Git Copilot Tools community."
       }
     ],
     "menus": {
       "view/title": [
         {
-          "command": "awesome-copilot.refreshAwesomeCopilot",
-          "when": "view == awesomeCopilotExplorer || view == awesomeCopilotExplorerSecondary",
+          "command": "vscode-git-copilot-tools.refreshVscodeGitCopilotTools",
+          "when": "view == vscodeGitCopilotToolsExplorer || view == vscodeGitCopilotToolsExplorerSecondary",
           "group": "navigation@2"
         },
         {
-          "command": "awesome-copilot.manageSources",
-          "when": "view == awesomeCopilotExplorer || view == awesomeCopilotExplorerSecondary",
+          "command": "vscode-git-copilot-tools.manageSources",
+          "when": "view == vscodeGitCopilotToolsExplorer || view == vscodeGitCopilotToolsExplorerSecondary",
           "group": "navigation@3"
         }
       ],
       "view/item/context": [
         {
-          "command": "awesome-copilot.downloadItem",
-          "when": "(view == awesomeCopilotExplorer || view == awesomeCopilotExplorerSecondary) && viewItem == copilotFile",
+          "command": "vscode-git-copilot-tools.downloadItem",
+          "when": "(view == vscodeGitCopilotToolsExplorer || view == vscodeGitCopilotToolsExplorerSecondary) && viewItem == copilotFile",
           "group": "inline@1"
         },
         {
-          "command": "awesome-copilot.previewItem",
-          "when": "(view == awesomeCopilotExplorer || view == awesomeCopilotExplorerSecondary) && viewItem == copilotFile",
+          "command": "vscode-git-copilot-tools.previewItem",
+          "when": "(view == vscodeGitCopilotToolsExplorer || view == vscodeGitCopilotToolsExplorerSecondary) && viewItem == copilotFile",
           "group": "inline@2"
         },
         {
-          "command": "awesome-copilot.openRepoInBrowser",
-          "when": "(view == awesomeCopilotExplorer || view == awesomeCopilotExplorerSecondary) && viewItem == copilotRepo",
+          "command": "vscode-git-copilot-tools.openRepoInBrowser",
+          "when": "(view == vscodeGitCopilotToolsExplorer || view == vscodeGitCopilotToolsExplorerSecondary) && viewItem == copilotRepo",
           "group": "inline@1"
         },
         {
-          "command": "awesome-copilot.refreshRepo",
-          "when": "(view == awesomeCopilotExplorer || view == awesomeCopilotExplorerSecondary) && viewItem == copilotRepo",
+          "command": "vscode-git-copilot-tools.refreshRepo",
+          "when": "(view == vscodeGitCopilotToolsExplorer || view == vscodeGitCopilotToolsExplorerSecondary) && viewItem == copilotRepo",
           "group": "inline@2"
         },
         {
-          "command": "awesome-copilot.removeRepo",
-          "when": "(view == awesomeCopilotExplorer || view == awesomeCopilotExplorerSecondary) && viewItem == copilotRepo",
+          "command": "vscode-git-copilot-tools.removeRepo",
+          "when": "(view == vscodeGitCopilotToolsExplorer || view == vscodeGitCopilotToolsExplorerSecondary) && viewItem == copilotRepo",
           "group": "inline@3"
         },
         {
-          "command": "awesome-copilot.removeRepo",
-          "when": "(view == awesomeCopilotExplorer || view == awesomeCopilotExplorerSecondary) && viewItem == copilotRepo",
+          "command": "vscode-git-copilot-tools.removeRepo",
+          "when": "(view == vscodeGitCopilotToolsExplorer || view == vscodeGitCopilotToolsExplorerSecondary) && viewItem == copilotRepo",
           "group": "1_repo@1"
         }
       ]

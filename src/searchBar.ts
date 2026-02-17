@@ -3,7 +3,7 @@ import { CopilotItem } from './types';
 import { getLogger } from './logger';
 
 /**
- * SearchBar provides file filtering functionality for the Awesome Copilot tree view
+ * SearchBar provides file filtering functionality for the Git Copilot Tools tree view
  */
 export class SearchBar {
     private searchTerm: string = '';
