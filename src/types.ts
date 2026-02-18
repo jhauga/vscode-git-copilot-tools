@@ -25,6 +25,7 @@ export interface RepoSource {
     repo: string;
     label?: string;
     baseUrl?: string; // For GitHub Enterprise: https://github.wdf.sap.corp
+    branch?: string; // Optional branch/tag/ref to track (e.g. "main", "dev", "v2"); when omitted the repo default branch is used
     folderMappings?: FolderMapping; // Custom folder-to-category mapping for this repo
 }
 

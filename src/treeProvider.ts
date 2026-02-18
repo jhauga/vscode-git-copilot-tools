@@ -119,9 +119,9 @@ export class VscodeGitCopilotToolsTreeItem extends vscode.TreeItem {
         } else if (itemType === 'repo' && repo) {
             this.contextValue = 'copilotRepo';
             this.iconPath = new vscode.ThemeIcon('repo');
-            this.description = `${repo.owner}/${repo.repo}`;
+            this.description = `${repo.owner}/${repo.repo}${repo.branch ? `@${repo.branch}` : ''}`;
             this.tooltip = new vscode.MarkdownString(
-                `**Repository**: ${repo.owner}/${repo.repo}\n\n${repo.label || 'GitHub Repository'}\n\nRight-click for options`
+                `**Repository**: ${repo.owner}/${repo.repo}\n\n${repo.label || 'GitHub Repository'}${repo.branch ? `\n\n**Branch**: ${repo.branch}` : ''}\n\nRight-click for options`
             );
         }
     }

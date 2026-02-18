@@ -253,7 +253,7 @@ export class GitHubService {
         const now = Date.now();
         let allFiles: GitHubFile[] = [];
         for (const repo of sources) {
-            const repoKey = `${repo.baseUrl || 'github.com'}/${repo.owner}/${repo.repo}`;
+            const repoKey = `${repo.baseUrl || 'github.com'}/${repo.owner}/${repo.repo}${repo.branch ? `@${repo.branch}` : ''}`;
             const cacheKey = `${repoKey}|${category}`;
             const cacheEntry = this.cache.get(cacheKey);
             if (!forceRefresh && cacheEntry && (now - cacheEntry.timestamp) < GitHubService.CACHE_DURATION) {
@@ -412,7 +412,7 @@ export class GitHubService {
         }
 
         const now = Date.now();
-        const repoKey = `${repo.baseUrl || 'github.com'}/${repo.owner}/${repo.repo}`;
+        const repoKey = `${repo.baseUrl || 'github.com'}/${repo.owner}/${repo.repo}${repo.branch ? `@${repo.branch}` : ''}`;
         const cacheKey = `${repoKey}|${category}`;
         const cacheEntry = this.cache.get(cacheKey);
 
@@ -814,11 +814,12 @@ export class GitHubService {
     // Build API URL for a specific path (empty string means repo root)
     private buildApiUrlForPath(repo: RepoSource, path: string): string {
         const contentsSuffix = path ? `/contents/${path}` : '/contents';
+        const refSuffix = repo.branch ? `?ref=${encodeURIComponent(repo.branch)}` : '';
         if (repo.baseUrl) {
             const baseUrl = repo.baseUrl.replace(/\/$/, '');
-            return `${baseUrl}/api/v3/repos/${repo.owner}/${repo.repo}${contentsSuffix}`;
+            return `${baseUrl}/api/v3/repos/${repo.owner}/${repo.repo}${contentsSuffix}${refSuffix}`;
         } else {
-            return `https://api.github.com/repos/${repo.owner}/${repo.repo}${contentsSuffix}`;
+            return `https://api.github.com/repos/${repo.owner}/${repo.repo}${contentsSuffix}${refSuffix}`;
         }
     }
 
@@ -841,7 +842,7 @@ export class GitHubService {
 
     // Clear cache entries for a specific repository
     clearRepoCache(repo: RepoSource): void {
-        const repoKey = `${repo.baseUrl || 'github.com'}/${repo.owner}/${repo.repo}`;
+        const repoKey = `${repo.baseUrl || 'github.com'}/${repo.owner}/${repo.repo}${repo.branch ? `@${repo.branch}` : ''}`;
         const keysToDelete: string[] = [];
 
         // Find all cache keys for this repository
@@ -861,7 +862,7 @@ export class GitHubService {
 
 	// Clear cache for a specific category in a repository
 	clearCategoryCache(repo: RepoSource, category: CopilotCategory): void {
-		const repoKey = `${repo.baseUrl || 'github.com'}/${repo.owner}/${repo.repo}`;
+		const repoKey = `${repo.baseUrl || 'github.com'}/${repo.owner}/${repo.repo}${repo.branch ? `@${repo.branch}` : ''}`;
 		const cacheKey = `${repoKey}|${category}`;
 		
 		if (this.cache.has(cacheKey)) {
