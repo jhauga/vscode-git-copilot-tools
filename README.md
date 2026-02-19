@@ -2,7 +2,7 @@
 
 A [Microsoft Visual Studio Code](https://code.visualstudio.com/) (*VS Code*) extension that allows you to browse, preview, and download GitHub Copilot customizations. The default repository is [github/awesome-copilot](https://github.com/github/awesome-copilot), but other repositories with VS Code Copilot `agent`, `instruction`, `plugin`, `prompt`, and `skill` tools can be used.
 
-This tool is a slight variation of [timheuer/vscode-vscode-git-copilot-tools](https://github.com/timheuer/vscode-vscode-git-copilot-tools) VS Code extension.
+This tool is a slight variation of [timheuer/vscode-awesome-copilot](https://github.com/timheuer/vscode-awesome-copilot) VS Code extension.
 
 <!--
 ## Install in VS Code

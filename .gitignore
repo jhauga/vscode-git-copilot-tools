@@ -6,4 +6,4 @@ node_modules/
 dist/
 out/
 *.code-workspace
-*.vsix 
+*.vsix
