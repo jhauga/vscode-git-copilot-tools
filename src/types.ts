@@ -25,6 +25,7 @@ export interface RepoSource {
     repo: string;
     label?: string;
     baseUrl?: string; // For GitHub Enterprise: https://github.wdf.sap.corp
+    branch?: string; // Optional branch/tag/ref to track (e.g. "main", "dev", "v2"); when omitted the repo default branch is used
     folderMappings?: FolderMapping; // Custom folder-to-category mapping for this repo
 }
 
@@ -81,7 +82,10 @@ export const KIND_TO_CATEGORY: Record<string, CopilotCategory> = {
     'skill': CopilotCategory.Skills,
 };
 
-// Plugin metadata structure from plugin.json files
+// Plugin metadata structure from plugin.json files.
+// Supports two formats:
+//   Legacy format: items array with {path, kind} objects
+//   Current format: separate agents/skills/instructions/prompts arrays with relative paths
 export interface PluginMetadata {
     id?: string;
     name: string;
@@ -92,7 +96,14 @@ export interface PluginMetadata {
     license?: string;
     featured?: boolean;
     tags?: string[];
-    items: PluginItem[];
+    keywords?: string[];
+    // Current format: separate arrays per category (paths relative to plugin dir, e.g. "./agents", "./skills/name")
+    agents?: string[];
+    skills?: string[];
+    instructions?: string[];
+    prompts?: string[];
+    // Legacy format: flat items array (normalized from current format during parsePluginJson)
+    items?: PluginItem[];
     display?: {
         ordering?: 'alpha' | 'custom' | 'manual';
         show_badge?: boolean;

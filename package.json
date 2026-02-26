@@ -71,11 +71,41 @@
                 "type": "object",
                 "description": "Custom folder-to-category mappings (optional). Map category names to custom folder paths, 'root' (entire repo), or null (excluded).",
                 "properties": {
-                  "agents": { "type": ["string", "null"], "description": "Path to agents folder, 'root', or null to exclude" },
-                  "instructions": { "type": ["string", "null"], "description": "Path to instructions folder, 'root', or null to exclude" },
-                  "plugins": { "type": ["string", "null"], "description": "Path to plugins folder, 'root', or null to exclude" },
-                  "prompts": { "type": ["string", "null"], "description": "Path to prompts folder, 'root', or null to exclude" },
-                  "skills": { "type": ["string", "null"], "description": "Path to skills folder, 'root', or null to exclude" }
+                  "agents": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "Path to agents folder, 'root', or null to exclude"
+                  },
+                  "instructions": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "Path to instructions folder, 'root', or null to exclude"
+                  },
+                  "plugins": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "Path to plugins folder, 'root', or null to exclude"
+                  },
+                  "prompts": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "Path to prompts folder, 'root', or null to exclude"
+                  },
+                  "skills": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "Path to skills folder, 'root', or null to exclude"
+                  }
                 }
               }
             }
@@ -354,5 +384,8 @@
   "dependencies": {
     "@timheuer/vscode-ext-logger": "^0.1.35",
     "axios": "^1.11.0"
+  },
+  "optionalDependencies": {
+    "@esbuild/linux-x64": "^0.27.3"
   }
 }

@@ -17,10 +17,41 @@ Keeping core functionality add additionaly features that allow more customizatio
 
 ### Major Features
 
+- [ ] **Custom Download Behaviour** - Extension configuration to specify where and how to download tools
+  - [ ] Refactor existing download functions into reusable, configurable components for a custom UI
+    - [ ] Keep UI/UX simple with strict constraints to prevent unexpected downloads
+  - [ ] Allow user to specify target folder(s) for downloaded tools
+  - [ ] Allow user to map tool metadata (name, description, version, etc.)
+  - [ ] Add **configuration types** to categorize settings:
+    - `config-download-folder` - where tools are saved
+    - `config-tool` - tool-specific settings
+    - `config-data` - data/metadata handling
+    - `config-support` - supporting file settings
+  - [ ] Add **download mode types** to control download behavior:
+    - `config-folder` - folder-level settings
+    - `config-download` - download action settings
+  - [ ] Implement folder naming using configuration types:
+    - [ ] **Single-file download mode** - For downloading individual files
+      - Example: downloading `fix-bugs.instructions.md` from the Instructions folder
+    - [ ] **Multi-file download mode** - For downloading folders with multiple files
+      - Used when a tool has supporting files (assets, references, scripts)
+      - Example: downloading a skill folder that includes `SKILL.md` plus a `references/` subfolder
+      - User can configure: subfolder naming, subfolder location, how to handle each file type
+  - [ ] Classify files in a tool's folder by type:
+    - **Tool types** (main files): `agent`, `instruction`, `plugin`, `prompt`, `skill`
+    - **Data types** (metadata files): `mapping-data`, `metadata`, `readme`
+      - Note: `mapping-data` refers to file path information (can be a single line)
+    - **Support types** (helper files): `asset`, `reference`, `script`
+  - [ ] Write tests for custom download behaviour using preset configurations
 - [ ] **Bulk operations** - Allow users to select and download multiple items at once with checkboxes
 - [ ] **Favorites/bookmarking system** - Let users star frequently used items with auto-update on new versions
 - [ ] **Local file management** - Show downloaded items in tree view with ability to delete/manage from extension
-- [ ] **`cookbook` and recipe downloading** - Download Copilot `cookbook` tools and/or recipes
+
+### New Download Tools
+
+- [ ] **`cookbook` and recipe downloading** - Download Copilot **Cookbook** tools and/or recipes
+- [ ] **`hooks`** - Download Copilot **Hooks** or automated workflows
+- [ ] **`agentic-workflow`** - Download Copilot **Agentic Workflows** to run coding agents in actions
 
 ### Minor Features
 

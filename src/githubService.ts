@@ -253,7 +253,7 @@ export class GitHubService {
         const now = Date.now();
         let allFiles: GitHubFile[] = [];
         for (const repo of sources) {
-            const repoKey = `${repo.baseUrl || 'github.com'}/${repo.owner}/${repo.repo}`;
+            const repoKey = `${repo.baseUrl || 'github.com'}/${repo.owner}/${repo.repo}${repo.branch ? `@${repo.branch}` : ''}`;
             const cacheKey = `${repoKey}|${category}`;
             const cacheEntry = this.cache.get(cacheKey);
             if (!forceRefresh && cacheEntry && (now - cacheEntry.timestamp) < GitHubService.CACHE_DURATION) {
@@ -412,7 +412,7 @@ export class GitHubService {
         }
 
         const now = Date.now();
-        const repoKey = `${repo.baseUrl || 'github.com'}/${repo.owner}/${repo.repo}`;
+        const repoKey = `${repo.baseUrl || 'github.com'}/${repo.owner}/${repo.repo}${repo.branch ? `@${repo.branch}` : ''}`;
         const cacheKey = `${repoKey}|${category}`;
         const cacheEntry = this.cache.get(cacheKey);
 
@@ -701,13 +701,53 @@ export class GitHubService {
                 throw new Error('Invalid plugin.json format: missing or invalid "description" field');
             }
 
-            if (!Array.isArray(metadata.items)) {
+            // Support both formats:
+            //   Current format: separate agents/skills/instructions/prompts arrays with relative paths
+            //   Legacy format: flat items array with {path, kind} objects
+            const hasCurrentFormat = Array.isArray(metadata.agents) || Array.isArray(metadata.skills) ||
+                                     Array.isArray(metadata.instructions) || Array.isArray(metadata.prompts);
+            const hasLegacyFormat = Array.isArray(metadata.items);
+
+            if (!hasCurrentFormat && !hasLegacyFormat) {
                 throw new Error('Invalid plugin.json format: missing or invalid "items" array');
+            }
+
+            if (hasCurrentFormat && !hasLegacyFormat) {
+                // Normalize current format into a flat items array for downstream compatibility.
+                // Relative paths (e.g. "./agents", "./skills/name") are resolved to repo-relative paths.
+                metadata.items = [];
+
+                const resolveRelPath = (relPath: string): string => {
+                    const stripped = relPath.startsWith('./') ? relPath.slice(2) : relPath;
+                    const noTrailingSlash = stripped.endsWith('/') ? stripped.slice(0, -1) : stripped;
+                    return `${pluginDirPath}/${noTrailingSlash}`;
+                };
+
+                for (const p of (metadata.agents ?? [])) {
+                    if (typeof p === 'string' && p.trim()) {
+                        metadata.items.push({ path: resolveRelPath(p), kind: 'agent' });
+                    }
+                }
+                for (const p of (metadata.skills ?? [])) {
+                    if (typeof p === 'string' && p.trim()) {
+                        metadata.items.push({ path: resolveRelPath(p), kind: 'skill' });
+                    }
+                }
+                for (const p of (metadata.instructions ?? [])) {
+                    if (typeof p === 'string' && p.trim()) {
+                        metadata.items.push({ path: resolveRelPath(p), kind: 'instruction' });
+                    }
+                }
+                for (const p of (metadata.prompts ?? [])) {
+                    if (typeof p === 'string' && p.trim()) {
+                        metadata.items.push({ path: resolveRelPath(p), kind: 'prompt' });
+                    }
+                }
             }
 
             const allowedKinds = ['instruction', 'prompt', 'agent', 'skill'];
 
-            metadata.items.forEach((item: any, index: number) => {
+            metadata.items!.forEach((item: any, index: number) => {
                 if (!item || typeof item !== 'object') {
                     throw new Error(`Invalid plugin.json format: item at index ${index} is not an object`);
                 }
@@ -814,11 +854,12 @@ export class GitHubService {
     // Build API URL for a specific path (empty string means repo root)
     private buildApiUrlForPath(repo: RepoSource, path: string): string {
         const contentsSuffix = path ? `/contents/${path}` : '/contents';
+        const refSuffix = repo.branch ? `?ref=${encodeURIComponent(repo.branch)}` : '';
         if (repo.baseUrl) {
             const baseUrl = repo.baseUrl.replace(/\/$/, '');
-            return `${baseUrl}/api/v3/repos/${repo.owner}/${repo.repo}${contentsSuffix}`;
+            return `${baseUrl}/api/v3/repos/${repo.owner}/${repo.repo}${contentsSuffix}${refSuffix}`;
         } else {
-            return `https://api.github.com/repos/${repo.owner}/${repo.repo}${contentsSuffix}`;
+            return `https://api.github.com/repos/${repo.owner}/${repo.repo}${contentsSuffix}${refSuffix}`;
         }
     }
 
@@ -841,7 +882,7 @@ export class GitHubService {
 
     // Clear cache entries for a specific repository
     clearRepoCache(repo: RepoSource): void {
-        const repoKey = `${repo.baseUrl || 'github.com'}/${repo.owner}/${repo.repo}`;
+        const repoKey = `${repo.baseUrl || 'github.com'}/${repo.owner}/${repo.repo}${repo.branch ? `@${repo.branch}` : ''}`;
         const keysToDelete: string[] = [];
 
         // Find all cache keys for this repository
@@ -861,7 +902,7 @@ export class GitHubService {
 
 	// Clear cache for a specific category in a repository
 	clearCategoryCache(repo: RepoSource, category: CopilotCategory): void {
-		const repoKey = `${repo.baseUrl || 'github.com'}/${repo.owner}/${repo.repo}`;
+		const repoKey = `${repo.baseUrl || 'github.com'}/${repo.owner}/${repo.repo}${repo.branch ? `@${repo.branch}` : ''}`;
 		const cacheKey = `${repoKey}|${category}`;
 		
 		if (this.cache.has(cacheKey)) {

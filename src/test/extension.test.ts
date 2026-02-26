@@ -338,12 +338,103 @@ suite('Extension Test Suite', () => {
             const result = await service.parsePluginJson(mockRepo, 'plugins/multi-kind');
 
             assert.strictEqual(result.metadata.id, 'multi-kind');
-            assert.strictEqual(result.metadata.items.length, 4);
-            assert.strictEqual(result.metadata.items[0].kind, 'instruction');
-            assert.strictEqual(result.metadata.items[1].kind, 'prompt');
-            assert.strictEqual(result.metadata.items[2].kind, 'agent');
-            assert.strictEqual(result.metadata.items[3].kind, 'skill');
+            assert.ok(Array.isArray(result.metadata.items));
+            assert.strictEqual(result.metadata.items!.length, 4);
+            assert.strictEqual(result.metadata.items![0].kind, 'instruction');
+            assert.strictEqual(result.metadata.items![1].kind, 'prompt');
+            assert.strictEqual(result.metadata.items![2].kind, 'agent');
+            assert.strictEqual(result.metadata.items![3].kind, 'skill');
             assert.strictEqual(result.rawContent, validJson);
+        });
+
+        test('should parse current format with agents and skills arrays', async () => {
+            const validJson = JSON.stringify({
+                name: "awesome-copilot",
+                description: "Meta prompts for discovery",
+                version: "1.0.0",
+                author: { name: "Awesome Copilot Community" },
+                repository: "https://github.com/github/awesome-copilot",
+                license: "MIT",
+                keywords: ["github-copilot", "discovery"],
+                agents: ["./agents"],
+                skills: [
+                    "./skills/suggest-awesome-github-copilot-skills",
+                    "./skills/suggest-awesome-github-copilot-instructions"
+                ]
+            });
+
+            mockFileContent(service, validJson);
+
+            const result = await service.parsePluginJson(mockRepo, 'plugins/awesome-copilot');
+
+            assert.strictEqual(result.metadata.id, 'awesome-copilot');
+            assert.strictEqual(result.metadata.name, 'awesome-copilot');
+            assert.ok(Array.isArray(result.metadata.items));
+            // 1 agent dir + 2 skill dirs = 3 items
+            assert.strictEqual(result.metadata.items!.length, 3);
+            // agent item should resolve relative path to repo-relative path
+            assert.strictEqual(result.metadata.items![0].kind, 'agent');
+            assert.strictEqual(result.metadata.items![0].path, 'plugins/awesome-copilot/agents');
+            // skill items should strip ./ and trailing slashes
+            assert.strictEqual(result.metadata.items![1].kind, 'skill');
+            assert.strictEqual(result.metadata.items![1].path, 'plugins/awesome-copilot/skills/suggest-awesome-github-copilot-skills');
+            assert.strictEqual(result.metadata.items![2].kind, 'skill');
+            assert.strictEqual(result.metadata.items![2].path, 'plugins/awesome-copilot/skills/suggest-awesome-github-copilot-instructions');
+        });
+
+        test('should parse current format with only skills (no agents)', async () => {
+            const validJson = JSON.stringify({
+                name: "Skills Only Plugin",
+                description: "A plugin with only skills",
+                skills: [
+                    "./skills/my-skill"
+                ]
+            });
+
+            mockFileContent(service, validJson);
+
+            const result = await service.parsePluginJson(mockRepo, 'plugins/skills-only');
+
+            assert.ok(Array.isArray(result.metadata.items));
+            assert.strictEqual(result.metadata.items!.length, 1);
+            assert.strictEqual(result.metadata.items![0].kind, 'skill');
+            assert.strictEqual(result.metadata.items![0].path, 'plugins/skills-only/skills/my-skill');
+        });
+
+        test('should parse current format with trailing slashes stripped from skill paths', async () => {
+            const validJson = JSON.stringify({
+                name: "Slash Strip Plugin",
+                description: "Tests trailing slash removal",
+                skills: [
+                    "./skills/my-skill/"
+                ]
+            });
+
+            mockFileContent(service, validJson);
+
+            const result = await service.parsePluginJson(mockRepo, 'plugins/slash-strip');
+
+            assert.ok(Array.isArray(result.metadata.items));
+            assert.strictEqual(result.metadata.items![0].path, 'plugins/slash-strip/skills/my-skill');
+        });
+
+        test('should reject current format JSON missing both items and type arrays', async () => {
+            const invalidJson = JSON.stringify({
+                name: "Test Plugin",
+                description: "A test plugin"
+                // No items, no agents, no skills, no instructions, no prompts
+            });
+
+            mockFileContent(service, invalidJson);
+
+            await assert.rejects(
+                async () => await service.parsePluginJson(mockRepo, 'plugins/test-plugin'),
+                (error: Error) => {
+                    assert.ok(error.message.includes('Failed to parse plugin.json'));
+                    assert.ok(error.message.includes('missing or invalid "items" array'));
+                    return true;
+                }
+            );
         });
     });
 

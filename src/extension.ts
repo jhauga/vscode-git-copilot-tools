@@ -107,7 +107,7 @@ export async function activate(context: vscode.ExtensionContext) {
                 });
                 if (!input) { continue; }
                 // Parse input - support GitHub Enterprise URLs
-                let owner = '', repo = '', baseUrl = '';
+                let owner = '', repo = '', baseUrl = '', branch = '';
 
                 // Clean the input first
                 const cleanInput = input.trim();
@@ -116,15 +116,17 @@ export async function activate(context: vscode.ExtensionContext) {
                 try {
                     if (cleanInput.startsWith('http')) {
                         // Enhanced URL parsing for enterprise GitHub
-                        const urlMatch = cleanInput.match(/^https?:\/\/([^\/]+)\/([^\/]+)\/([^\/]+)(?:\/.*)?$/);
+                        // Also captures optional /tree/<branch> segment
+                        const urlMatch = cleanInput.match(/^https?:\/\/([^\/]+)\/([^\/]+)\/([^\/]+?)(?:\.git)?(?:\/tree\/([^\/][^?#]*))?(?:[?#].*)?$/);
                         logger.debug('URL match result:', urlMatch);
 
                         if (urlMatch) {
                             const domain = urlMatch[1];
                             owner = urlMatch[2];
-                            repo = urlMatch[3].replace(/\.git$/, ''); // Remove .git suffix if present
+                            repo = urlMatch[3];
+                            branch = urlMatch[4] ? urlMatch[4].trim() : '';
 
-                            logger.debug('Parsed URL - domain:', domain, 'owner:', owner, 'repo:', repo);
+                            logger.debug('Parsed URL - domain:', domain, 'owner:', owner, 'repo:', repo, 'branch:', branch);
 
                             // If not github.com, it's GitHub Enterprise
                             if (domain !== 'github.com') {
@@ -148,7 +150,7 @@ export async function activate(context: vscode.ExtensionContext) {
                     logger.error('URL parsing error:', parseError);
                 }
 
-                logger.debug('Final parsed values - owner:', owner, 'repo:', repo, 'baseUrl:', baseUrl);
+                logger.debug('Final parsed values - owner:', owner, 'repo:', repo, 'baseUrl:', baseUrl, 'branch:', branch);
 
                 if (!owner || !repo) {
                     vscode.window.showErrorMessage(`Invalid repository format. Use owner/repo or full URL. Parsed: owner="${owner}", repo="${repo}"`);
@@ -181,11 +183,13 @@ export async function activate(context: vscode.ExtensionContext) {
                     // Helper function to check if a folder exists
                     const checkFolder = async (cat: string): Promise<boolean> => {
                         // Build correct API URL for GitHub or GitHub Enterprise
+                        // Append ?ref=<branch> when a specific branch was requested
+                        const refSuffix = branch ? `?ref=${encodeURIComponent(branch)}` : '';
                         let apiUrl: string;
                         if (baseUrl) {
-                            apiUrl = `${baseUrl}/api/v3/repos/${owner}/${repo}/contents/${cat}`;
+                            apiUrl = `${baseUrl}/api/v3/repos/${owner}/${repo}/contents/${cat}${refSuffix}`;
                         } else {
-                            apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${cat}`;
+                            apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${cat}${refSuffix}`;
                         }
 
                         const headers: Record<string, string> = {
@@ -359,8 +363,8 @@ export async function activate(context: vscode.ExtensionContext) {
 
                         // Create repo source with custom folder mappings
                         const repoSource: RepoSource = baseUrl
-                            ? { owner, repo, baseUrl, folderMappings }
-                            : { owner, repo, folderMappings };
+                            ? { owner, repo, baseUrl, ...(branch && { branch }), folderMappings }
+                            : { owner, repo, ...(branch && { branch }), folderMappings };
                         sources.push(repoSource);
                         await RepoStorage.setSources(context, sources);
 
@@ -376,8 +380,10 @@ export async function activate(context: vscode.ExtensionContext) {
                         continue;
                     }
 
-                    // Create repo source object with baseUrl if needed
-                    const repoSource = baseUrl ? { owner, repo, baseUrl } : { owner, repo };
+                    // Create repo source object with baseUrl and optional branch if needed
+                    const repoSource = baseUrl
+                        ? { owner, repo, baseUrl, ...(branch && { branch }) }
+                        : { owner, repo, ...(branch && { branch }) };
                     sources.push(repoSource);
                     await RepoStorage.setSources(context, sources);
 
@@ -386,14 +392,16 @@ export async function activate(context: vscode.ExtensionContext) {
                         owner,
                         repo,
                         baseUrl: baseUrl || 'github.com',
+                        branch: branch || '(default)',
                         foundFolders,
                         displayUrl: baseUrl ? `${baseUrl}/${owner}/${repo}` : `${owner}/${repo}`
                     });
 
                     const displayUrl = baseUrl ? `${baseUrl}/${owner}/${repo}` : `${owner}/${repo}`;
+                    const branchSuffix = branch ? ` (branch: ${branch})` : '';
 
                     // Create success message with found folders
-                    let successMessage = `✅ Successfully added: ${displayUrl}`;
+                    let successMessage = `✅ Successfully added: ${displayUrl}${branchSuffix}`;
                     if (foundFolders.length > 0) {
                         successMessage += `\n📁 Found folders: ${foundFolders.join(', ')}`;
                         if (missingFolders.length > 0) {
@@ -401,7 +409,7 @@ export async function activate(context: vscode.ExtensionContext) {
                         }
                     }
 
-                    statusBarManager.showSuccess(`✅ Successfully added: ${displayUrl}`);                } catch (err: any) {
+                    statusBarManager.showSuccess(`✅ Successfully added: ${displayUrl}${branchSuffix}`);                } catch (err: any) {
                     // Enhanced error handling with detailed diagnostics
                     const errorMessage = (err && err.message) || err;
                     const statusCode = err.response?.status;
@@ -865,7 +873,7 @@ async function downloadCopilotItem(item: CopilotItem, githubService: GitHubServi
             }
 
             const metadata = pluginResult.metadata;
-            const pluginItems = metadata.items;
+            const pluginItems = metadata.items ?? [];
 
             if (pluginItems.length === 0) {
                 vscode.window.showWarningMessage(`Plugin "${metadata.name}" has no items to download.`);
@@ -937,13 +945,33 @@ async function downloadCopilotItem(item: CopilotItem, githubService: GitHubServi
                         }
                         downloadedFiles.push(`${pluginItem.kind}: ${skillDirName} (${contents.filter(f => f.type === 'file').length} files)`);
                     } else {
-                        // Single file items (instruction, prompt, agent)
-                        const filename = pluginItem.path.split('/').pop() || pluginItem.path;
-                        const targetFilePath = path.join(fullCategoryPath, filename);
+                        // Instruction, prompt, or agent items.
+                        // In the current plugin.json format, agents may reference an entire directory
+                        // (e.g. "plugins/foo/agents" with no file extension). In that case, download all
+                        // files inside the directory to the category folder.
+                        const lastSegment = pluginItem.path.split('/').pop() || pluginItem.path;
+                        const isDirectoryRef = !lastSegment.includes('.');
 
-                        const fileData = await githubService.getFileContentByPath(item.repo, pluginItem.path);
-                        fs.writeFileSync(targetFilePath, fileData.content, 'utf8');
-                        downloadedFiles.push(`${pluginItem.kind}: ${filename}`);
+                        if (isDirectoryRef) {
+                            // Directory reference (e.g. agents dir) — download all contained files flat
+                            const contents = await githubService.getDirectoryContents(item.repo, pluginItem.path);
+                            for (const fileItem of contents) {
+                                if (fileItem.type === 'file') {
+                                    const targetFilePath = path.join(fullCategoryPath, fileItem.name);
+                                    const content = await githubService.getFileContent(fileItem.download_url);
+                                    fs.writeFileSync(targetFilePath, content, 'utf8');
+                                }
+                            }
+                            const fileCount = contents.filter(f => f.type === 'file').length;
+                            downloadedFiles.push(`${pluginItem.kind}: ${lastSegment}/ (${fileCount} files)`);
+                        } else {
+                            // Single file item
+                            const filename = lastSegment;
+                            const targetFilePath = path.join(fullCategoryPath, filename);
+                            const fileData = await githubService.getFileContentByPath(item.repo, pluginItem.path);
+                            fs.writeFileSync(targetFilePath, fileData.content, 'utf8');
+                            downloadedFiles.push(`${pluginItem.kind}: ${filename}`);
+                        }
                     }
 
                     downloadedCount++;
@@ -1283,8 +1311,9 @@ async function previewCopilotItem(item: CopilotItem, githubService: GitHubServic
                 if (meta.author?.name) { previewContent += `**Author:** ${meta.author.name}\n`; }
                 if (meta.license) { previewContent += `**License:** ${meta.license}\n`; }
                 if (meta.tags?.length) { previewContent += `**Tags:** ${meta.tags.join(', ')}\n`; }
-                previewContent += `\n**Items (${meta.items.length}):**\n`;
-                meta.items.forEach(pi => {
+                const metaItems = meta.items ?? [];
+                previewContent += `\n**Items (${metaItems.length}):**\n`;
+                metaItems.forEach(pi => {
                     const filename = pi.path.split('/').pop() || pi.path;
                     previewContent += `- ${filename} (${pi.kind})\n`;
                 });

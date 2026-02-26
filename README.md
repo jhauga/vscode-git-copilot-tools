@@ -2,7 +2,7 @@
 
 A [Microsoft Visual Studio Code](https://code.visualstudio.com/) (*VS Code*) extension that allows you to browse, preview, and download GitHub Copilot customizations. The default repository is [github/awesome-copilot](https://github.com/github/awesome-copilot), but other repositories with VS Code Copilot `agent`, `instruction`, `plugin`, `prompt`, and `skill` tools can be used.
 
-This tool is a slight variation of [timheuer/vscode-vscode-git-copilot-tools](https://github.com/timheuer/vscode-vscode-git-copilot-tools) VS Code extension.
+This tool is a slight variation of [timheuer/vscode-awesome-copilot](https://github.com/timheuer/vscode-awesome-copilot) VS Code extension.
 
 <!--
 ## Install in VS Code
@@ -81,7 +81,10 @@ The panel shows one input field per category. For each category you can enter:
 
 Folder mappings can also be set directly in VS Code `settings.json` under the
 `vscode-git-copilot-tools.repositories` array. Each repository object accepts an optional
-`folderMappings` property:
+`folderMappings` property and an optional `branch` property to pin content fetching to a
+specific branch, tag, or commit SHA. When `branch` is omitted the repository's default branch
+is used. You can also paste a full GitHub tree URL (e.g. `https://github.com/<owner>/<repo>/tree/<branch>`)
+into **Manage Sources > Add Repository** and the branch will be extracted automatically.
 
 ```json
 {
@@ -110,6 +113,12 @@ Folder mappings can also be set directly in VS Code `settings.json` under the
 | `plugins` | `string \| null` | Path to plugins folder, `"root"`, or `null` to exclude |
 | `prompts` | `string \| null` | Path to prompts folder, `"root"`, or `null` to exclude |
 | `skills` | `string \| null` | Path to skills folder, `"root"`, or `null` to exclude |
+
+#### Repository `branch` Property
+
+| Property | Type | Description |
+|---|---|---|
+| `branch` | `string` | Branch, tag, or commit SHA to read content from. When omitted the repository's default branch is used. |
 
 All properties are optional. Omitted properties use the default category path.
 
@@ -152,13 +161,23 @@ All properties are optional. Omitted properties use the default category path.
 }
 ```
 
+**Repository pinned to a specific branch:**
+
+```json
+{
+  "owner": "myorg",
+  "repo": "copilot-config",
+  "branch": "dev"
+}
+```
+
 ## Configuration Reference
 
 All settings are under the `vscode-git-copilot-tools` namespace and scoped to the application level.
 
 | Setting | Type | Default | Description |
 |---|---|---|---|
-| `repositories` | `array` | See [docs/configuration.md](docs/configuration.md) | GitHub repositories used as content sources. Each entry supports `owner`, `repo`, `label`, `baseUrl`, and `folderMappings`. |
+| `repositories` | `array` | See [docs/configuration.md](docs/configuration.md) | GitHub repositories used as content sources. Each entry supports `owner`, `repo`, `label`, `baseUrl`, `branch`, and `folderMappings`. |
 | `enterpriseToken` | `string` | `""` | Personal Access Token for GitHub Enterprise authentication. |
 | `cacheTimeout` | `number` | `3600000` | Cache duration in milliseconds (1 hour). Min 60000, max 86400000. |
 | `autoRefresh` | `boolean` | `false` | Automatically refresh content on VS Code startup. |
