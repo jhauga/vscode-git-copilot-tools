@@ -6,7 +6,8 @@ const CATEGORIES: CopilotCategory[] = [
     CopilotCategory.Instructions,
     CopilotCategory.Plugins,
     CopilotCategory.Prompts,
-    CopilotCategory.Skills
+    CopilotCategory.Skills,
+    CopilotCategory.Workflows
 ];
 
 /**

@@ -215,7 +215,7 @@ export class VscodeGitCopilotToolsProvider implements vscode.TreeDataProvider<Vs
         }
 
         const repoData = this.repoItems.get(repoKey)!;
-        const categories = [CopilotCategory.Plugins, CopilotCategory.Instructions, CopilotCategory.Prompts, CopilotCategory.Agents, CopilotCategory.Skills];
+        const categories = [CopilotCategory.Plugins, CopilotCategory.Instructions, CopilotCategory.Prompts, CopilotCategory.Agents, CopilotCategory.Skills, CopilotCategory.Workflows];
 
         const allItems: CopilotItem[] = [];
 
@@ -323,6 +323,14 @@ export class VscodeGitCopilotToolsProvider implements vscode.TreeDataProvider<Vs
                     undefined,
                     CopilotCategory.Skills,
                     element.repo
+                ),
+                new VscodeGitCopilotToolsTreeItem(
+                    CATEGORY_LABELS[CopilotCategory.Workflows],
+                    vscode.TreeItemCollapsibleState.Collapsed,
+                    'category',
+                    undefined,
+                    CopilotCategory.Workflows,
+                    element.repo
                 )
             ];
         }
@@ -402,7 +410,7 @@ export class VscodeGitCopilotToolsProvider implements vscode.TreeDataProvider<Vs
         }
 
         const repos = RepoStorage.getSources(this.context);
-        const categories = [CopilotCategory.Plugins, CopilotCategory.Instructions, CopilotCategory.Prompts, CopilotCategory.Agents, CopilotCategory.Skills];
+        const categories = [CopilotCategory.Plugins, CopilotCategory.Instructions, CopilotCategory.Prompts, CopilotCategory.Agents, CopilotCategory.Skills, CopilotCategory.Workflows];
 
         // Collect all items for update checking
         const allItems: CopilotItem[] = [];

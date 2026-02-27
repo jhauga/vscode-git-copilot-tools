@@ -105,6 +105,13 @@
                       "null"
                     ],
                     "description": "Path to skills folder, 'root', or null to exclude"
+                  },
+                  "workflows": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "Path to workflows folder, 'root', or null to exclude"
                   }
                 }
               }
