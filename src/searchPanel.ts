@@ -77,13 +77,15 @@ export class SearchViewProvider implements vscode.WebviewViewProvider {
         body {
             padding: 0;
             margin: 0;
-            font-family: var(--vscode-font-family);
+            font-family: 'Segoe WPC', 'Segoe UI', var(--vscode-font-family), sans-serif;
+            font-size: 13px;
+            line-height: 18.2px;
             background-color: var(--vscode-sideBar-background);
             color: var(--vscode-foreground);
             overflow: hidden;
         }
         .search-container {
-            padding: 12px 16px;
+            padding: 6px 8px 4px 8px;
             display: flex;
             align-items: center;
             gap: 6px;
@@ -103,7 +105,7 @@ export class SearchViewProvider implements vscode.WebviewViewProvider {
         }
         .search-input {
             width: 100%;
-            padding: 6px 32px 6px 28px;
+            padding: 4px 28px 4px 26px;
             background-color: var(--vscode-input-background);
             color: var(--vscode-input-foreground);
             border: 1px solid var(--vscode-input-border, transparent);
@@ -142,7 +144,7 @@ export class SearchViewProvider implements vscode.WebviewViewProvider {
             border-radius: 2px;
         }
         .status-text {
-            padding: 8px 16px;
+            padding: 2px 8px 6px 8px;
             font-size: 11px;
             opacity: 0.7;
             text-align: center;

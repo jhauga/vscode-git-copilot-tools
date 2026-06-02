@@ -851,6 +851,56 @@ export class GitHubService {
         }
     }
 
+    // Lightweight existence check for a repo-relative path via the Contents API.
+    // Returns true on HTTP 200, false on 404, and propagates other errors.
+    async pathExists(repo: RepoSource, filePath: string): Promise<boolean> {
+        try {
+            const apiUrl = this.buildApiUrlForPath(repo, filePath);
+            const isEnterprise = !!repo.baseUrl;
+            const headers = await this.createRequestHeaders(isEnterprise);
+
+            const axiosConfig: any = {
+                timeout: 10000,
+                headers,
+                withCredentials: isEnterprise,
+                validateStatus: (status: number) => status === 200 || status === 404
+            };
+
+            if (isEnterprise) {
+                const httpsAgent = this.createHttpsAgent(apiUrl);
+                if (httpsAgent) {
+                    axiosConfig.httpsAgent = httpsAgent;
+                    axiosConfig.agent = httpsAgent;
+                }
+            }
+
+            const config = vscode.workspace.getConfiguration('vscode-git-copilot-tools');
+            const allowInsecureEnterpriseCerts = config.get<boolean>('allowInsecureEnterpriseCerts', false);
+
+            let response;
+            if (isEnterprise && allowInsecureEnterpriseCerts) {
+                const originalRejectUnauthorized = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+                process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+                try {
+                    response = await axios.get(apiUrl, axiosConfig);
+                } finally {
+                    if (originalRejectUnauthorized === undefined) {
+                        delete process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+                    } else {
+                        process.env.NODE_TLS_REJECT_UNAUTHORIZED = originalRejectUnauthorized;
+                    }
+                }
+            } else {
+                response = await axios.get(apiUrl, axiosConfig);
+            }
+
+            return response.status === 200;
+        } catch (error) {
+            getLogger().debug(`pathExists check failed for ${filePath}:`, error);
+            return false;
+        }
+    }
+
     // Build API URL for a specific path (empty string means repo root)
     private buildApiUrlForPath(repo: RepoSource, path: string): string {
         const contentsSuffix = path ? `/contents/${path}` : '/contents';

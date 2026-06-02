@@ -50,6 +50,10 @@ export class VscodeGitCopilotToolsTreeItem extends vscode.TreeItem {
             // Check if this item has an update available
             const hasUpdate = downloadTracker?.hasUpdate(copilotItem) || false;
             const isDownloaded = downloadTracker?.isDownloaded(copilotItem.id) || false;
+            // Terminal-green tint applied to the category icon when an item is
+            // already downloaded locally (and no update is pending), so users can
+            // tell at a glance which tools they have installed.
+            const downloadedColor = new vscode.ThemeColor('terminal.ansiGreen');
 
             // Skills and Plugins are folders, not individual files
             if (copilotItem.category === CopilotCategory.Skills && copilotItem.file.type === 'dir') {
@@ -57,20 +61,22 @@ export class VscodeGitCopilotToolsTreeItem extends vscode.TreeItem {
                 this.tooltip = new vscode.MarkdownString(
                     `**${copilotItem.name}**\n\nType: Skill Folder\nRepo: ${copilotItem.repo ? copilotItem.repo.owner + '/' + copilotItem.repo.repo : ''}${hasUpdate ? '\n\n⚠️ **Update Available** - A newer version is available on the remote repository.' : ''}\n\nClick to preview or download entire skill folder`
                 );
-                this.iconPath = new vscode.ThemeIcon('folder');
+                this.iconPath = isDownloaded
+                    ? new vscode.ThemeIcon('folder', downloadedColor)
+                    : new vscode.ThemeIcon('folder');
             } else if (copilotItem.category === CopilotCategory.Plugins && copilotItem.file.type === 'dir') {
                 this.description = hasUpdate ? '🔄 Update Available' : 'Plugin';
                 this.tooltip = new vscode.MarkdownString(
                     `**${copilotItem.name}**\n\nType: Plugin\nRepo: ${copilotItem.repo ? copilotItem.repo.owner + '/' + copilotItem.repo.repo : ''}${hasUpdate ? '\n\n⚠️ **Update Available** - A newer version is available on the remote repository.' : ''}\n\nClick to preview or download plugin`
                 );
-                if (hasUpdate) {
-                    this.iconPath = new vscode.ThemeIcon('cloud-download', new vscode.ThemeColor('notificationsWarningIcon.foreground'));
-                } else {
-                    this.iconPath = new vscode.ThemeIcon('package');
-                }
+                this.iconPath = isDownloaded
+                    ? new vscode.ThemeIcon('package', downloadedColor)
+                    : new vscode.ThemeIcon('package');
             } else {
                 this.resourceUri = vscode.Uri.parse(copilotItem.file.download_url);
-                this.description = `${(copilotItem.file.size / 1024).toFixed(1)}KB`;
+                this.description = hasUpdate
+                    ? `🔄 Update Available`
+                    : `${(copilotItem.file.size / 1024).toFixed(1)}KB`;
 
                 // Plugins are special - they contain multiple files
                 if (copilotItem.category === CopilotCategory.Plugins) {
@@ -106,9 +112,12 @@ export class VscodeGitCopilotToolsTreeItem extends vscode.TreeItem {
                         baseIconId = 'file';
                 }
 
-                // Use cloud-download icon with color indicator if update is available
-                if (hasUpdate) {
-                    this.iconPath = new vscode.ThemeIcon('cloud-download', new vscode.ThemeColor('notificationsWarningIcon.foreground'));
+                // Left-slot icon: always the category icon. Tinted terminal-green
+                // when the item is downloaded locally so users can tell installed
+                // tools apart at a glance. Update status is surfaced inline in the
+                // description text rather than by replacing the icon.
+                if (isDownloaded) {
+                    this.iconPath = new vscode.ThemeIcon(baseIconId, downloadedColor);
                 } else {
                     this.iconPath = new vscode.ThemeIcon(baseIconId);
                 }
@@ -133,6 +142,8 @@ export class VscodeGitCopilotToolsProvider implements vscode.TreeDataProvider<Vs
 
     private repoItems: Map<string, Map<CopilotCategory, CopilotItem[]>> = new Map();
     private loading: Set<string> = new Set();
+    // Per (repo|category) cache of paths that passed root-mapped category validation.
+    private rootFilterCache: Map<string, Set<string>> = new Map();
     private context: vscode.ExtensionContext | undefined;
     private searchBar: SearchBar;
     private downloadTracker: DownloadTracker | undefined;
@@ -160,6 +171,7 @@ export class VscodeGitCopilotToolsProvider implements vscode.TreeDataProvider<Vs
         // Clear all cached data
         this.repoItems.clear();
         this.loading.clear();
+        this.rootFilterCache.clear();
 
         // Fire tree data change event to refresh the UI
         this._onDidChangeTreeData.fire();
@@ -176,6 +188,14 @@ export class VscodeGitCopilotToolsProvider implements vscode.TreeDataProvider<Vs
         // Find and remove cached data for this specific repo
         const repoKey = `${repo.owner}/${repo.repo}`;
         this.repoItems.delete(repoKey);
+
+        // Drop cached root-mapped validation entries for this repo.
+        const repoCachePrefix = `${repo.baseUrl || 'github.com'}/${repo.owner}/${repo.repo}${repo.branch ? `@${repo.branch}` : ''}|`;
+        for (const key of Array.from(this.rootFilterCache.keys())) {
+            if (key.startsWith(repoCachePrefix)) {
+                this.rootFilterCache.delete(key);
+            }
+        }
 
         // Clear loading states for this repo to allow fresh requests
         const loadingKeysToDelete = Array.from(this.loading).filter(key => key.startsWith(`${repoKey}-`));
@@ -282,6 +302,36 @@ export class VscodeGitCopilotToolsProvider implements vscode.TreeDataProvider<Vs
         }
 
         if (element.itemType === 'repo' && element.repo) {
+            // If any categories are mapped to repo root, expand the repo node directly
+            // to those categories' files (skip the intermediate categories layer).
+            const mappings = element.repo.folderMappings;
+            if (mappings) {
+                const rootCategories = (Object.keys(mappings) as CopilotCategory[])
+                    .filter(cat => mappings[cat] === 'root');
+                if (rootCategories.length > 0) {
+                    const fileItems: VscodeGitCopilotToolsTreeItem[] = [];
+                    for (const category of rootCategories) {
+                        const items = await this.getItemsForRepoAndCategory(element.repo, category);
+                        // Apply category-specific filtering to exclude unrelated repo-root
+                        // entries (e.g. .git, .github, images, README.md, LICENSE).
+                        const categoryFiltered = await this.filterRootCategoryItems(element.repo, category, items);
+                        const filteredItems = this.searchBar.filterItems(categoryFiltered);
+                        for (const item of filteredItems) {
+                            fileItems.push(new VscodeGitCopilotToolsTreeItem(
+                                item.name,
+                                vscode.TreeItemCollapsibleState.None,
+                                'file',
+                                item,
+                                category,
+                                element.repo,
+                                this.downloadTracker
+                            ));
+                        }
+                    }
+                    return fileItems;
+                }
+            }
+
             // Return categories for this repository
             return [
                 new VscodeGitCopilotToolsTreeItem(
@@ -402,6 +452,103 @@ export class VscodeGitCopilotToolsProvider implements vscode.TreeDataProvider<Vs
         }
 
         return repoData.get(category) || [];
+    }
+
+    /**
+     * Filter items returned for a category that is mapped to the repo root, so that
+     * unrelated entries (e.g. .git, .github, images, README.md, LICENSE) are hidden.
+     *
+     * Rules per category:
+     *  - Plugins      : directory containing both ".github/plugin" and "README.md"
+     *  - Instructions : file whose name ends with ".instructions.md"
+     *  - Prompts      : file whose name ends with ".prompt.md"
+     *  - Agents       : file whose name ends with ".agent.md"
+     *  - Skills       : directory containing "SKILL.md"
+     *  - Workflows    : file ending in ".md" whose front-matter "name:" value
+     *                   matches the filename (dashes replaced with spaces, case
+     *                   insensitive substring match)
+     */
+    private async filterRootCategoryItems(
+        repo: RepoSource,
+        category: CopilotCategory,
+        items: CopilotItem[]
+    ): Promise<CopilotItem[]> {
+        // Fast, name-only filters first.
+        const nameFiltered = items.filter(item => {
+            switch (category) {
+                case CopilotCategory.Instructions:
+                    return item.file.type === 'file' && item.name.toLowerCase().endsWith('.instructions.md');
+                case CopilotCategory.Prompts:
+                    return item.file.type === 'file' && item.name.toLowerCase().endsWith('.prompt.md');
+                case CopilotCategory.Agents:
+                    return item.file.type === 'file' && item.name.toLowerCase().endsWith('.agent.md');
+                case CopilotCategory.Workflows:
+                    return item.file.type === 'file' && item.name.toLowerCase().endsWith('.md');
+                case CopilotCategory.Skills:
+                case CopilotCategory.Plugins:
+                    return item.file.type === 'dir' && !item.name.startsWith('.');
+                default:
+                    return true;
+            }
+        });
+
+        // Categories without remote validation are done.
+        if (
+            category === CopilotCategory.Instructions ||
+            category === CopilotCategory.Prompts ||
+            category === CopilotCategory.Agents
+        ) {
+            return nameFiltered;
+        }
+
+        const cacheKey = `${repo.baseUrl || 'github.com'}/${repo.owner}/${repo.repo}${repo.branch ? `@${repo.branch}` : ''}|${category}`;
+        const cached = this.rootFilterCache.get(cacheKey);
+
+        const validate = async (item: CopilotItem): Promise<boolean> => {
+            try {
+                switch (category) {
+                    case CopilotCategory.Plugins: {
+                        const [hasPluginDir, hasReadme] = await Promise.all([
+                            this.githubService.pathExists(repo, `${item.file.path}/.github/plugin`),
+                            this.githubService.pathExists(repo, `${item.file.path}/README.md`)
+                        ]);
+                        return hasPluginDir && hasReadme;
+                    }
+                    case CopilotCategory.Skills:
+                        return await this.githubService.pathExists(repo, `${item.file.path}/SKILL.md`);
+                    case CopilotCategory.Workflows: {
+                        const fileData = await this.githubService.getFileContentByPath(repo, item.file.path);
+                        const nameMatch = /^---[\r\n]+([\s\S]*?)[\r\n]+---/m.exec(fileData.content);
+                        if (!nameMatch) { return false; }
+                        const frontMatter = nameMatch[1];
+                        const nameProp = /^[ \t]*name[ \t]*:[ \t]*(.+?)[ \t]*$/m.exec(frontMatter);
+                        if (!nameProp) { return false; }
+                        const declaredName = nameProp[1].replace(/^['"]|['"]$/g, '').toLowerCase();
+                        const baseName = item.name.replace(/\.md$/i, '').replace(/-/g, ' ').toLowerCase();
+                        return declaredName.indexOf(baseName) > -1;
+                    }
+                    default:
+                        return true;
+                }
+            } catch (error) {
+                getLogger().debug(`Root-category validation failed for ${item.file.path}:`, error);
+                return false;
+            }
+        };
+
+        if (cached) {
+            return nameFiltered.filter(item => cached.has(item.file.path));
+        }
+
+        const results = await Promise.all(nameFiltered.map(async item => ({
+            item,
+            ok: await validate(item)
+        })));
+
+        const accepted = new Set(results.filter(r => r.ok).map(r => r.item.file.path));
+        this.rootFilterCache.set(cacheKey, accepted);
+
+        return results.filter(r => r.ok).map(r => r.item);
     }
 
     private async loadAllReposAndCategories(forceRefresh: boolean = false): Promise<void> {
