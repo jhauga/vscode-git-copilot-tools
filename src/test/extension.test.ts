@@ -8,6 +8,7 @@ import { CopilotCategory } from '../types';
 import { extractSlashCommands, generateNoteContent } from '../views/note.vscode-git-copilot-tools';
 import * as logger from '../logger';
 
+let failCount = 0;
 suite('Extension Test Suite', () => {
     vscode.window.showInformationMessage('Start all tests.');
 
@@ -28,10 +29,19 @@ suite('Extension Test Suite', () => {
         await config.update('enableGithubAuth', false, vscode.ConfigurationTarget.Global);
     });
 
+    setup(function() {});
+
+    teardown(function() {
+        if (this.currentTest?.state === 'failed') {
+            failCount++;
+        }
+    });
+
     suiteTeardown(async () => {
         // Restore default auth setting
         const config = vscode.workspace.getConfiguration('vscode-git-copilot-tools');
         await config.update('enableGithubAuth', undefined, vscode.ConfigurationTarget.Global);
+        console.log(`  ${failCount} failing`);
     });
 
     test('Sample test', () => {
