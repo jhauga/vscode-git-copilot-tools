@@ -45,6 +45,7 @@ Each property in `folderMappings` corresponds to a content category:
 | Property | Type | Description |
 |---|---|---|
 | `agents` | `string \| null` | Path to agents content, `"root"`, or `null` to exclude |
+| `hooks` | `string \| null` | Path to hooks content, `"root"`, or `null` to exclude |
 | `instructions` | `string \| null` | Path to instructions content, `"root"`, or `null` to exclude |
 | `plugins` | `string \| null` | Path to plugins content, `"root"`, or `null` to exclude |
 | `prompts` | `string \| null` | Path to prompts content, `"root"`, or `null` to exclude |
@@ -252,6 +253,7 @@ Downloaded content is saved to the workspace under the following paths:
 | Category | Local Path |
 |---|---|
 | Agents | `.github/agents` |
+| Hooks | `.github/hooks` |
 | Instructions | `.github/instructions` |
 | Plugins | `.github/plugins` |
 | Prompts | `.github/prompts` |
@@ -260,6 +262,22 @@ Downloaded content is saved to the workspace under the following paths:
 Folders are created automatically if they do not exist. The local save paths are fixed
 regardless of any custom `folderMappings` configured for the source repository;
 `folderMappings` only control where content is fetched *from*, not where it is saved.
+
+## Installing Hooks
+
+Hook configuration files downloaded from a source repository are saved to `.github/hooks/`
+in your workspace. To activate hooks in your own repository:
+
+1. Copy the hook folder to your repository's `.github/hooks/` directory.
+2. Ensure any bundled scripts are executable (`chmod +x script.sh`).
+3. Commit and merge the changes to the repository's default branch.
+
+Each hook file is a JSON document named `<description>.json` and must include
+`"version": 1` at the top level along with a `hooks` object containing one or more
+trigger keys (`sessionStart`, `sessionEnd`, `userPromptSubmitted`, `preToolUse`,
+`postToolUse`, `errorOccurred`). See the
+[GitHub Copilot hooks reference](https://docs.github.com/en/copilot/reference/hooks-reference)
+for the full schema.
 
 ## Configuring Folder Mappings via the UI
 

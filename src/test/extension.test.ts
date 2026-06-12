@@ -4,7 +4,7 @@ import * as assert from 'assert';
 // as well as import your extension to test it
 import * as vscode from 'vscode';
 import { GitHubService } from '../githubService';
-import { CopilotCategory } from '../types';
+import { CopilotCategory, FOLDER_PATHS, resolveContentPath } from '../types';
 import { extractSlashCommands, generateNoteContent } from '../views/note.vscode-git-copilot-tools';
 import * as logger from '../logger';
 
@@ -445,6 +445,52 @@ suite('Extension Test Suite', () => {
                     return true;
                 }
             );
+        });
+    });
+
+    suite('Hook Path Resolution Tests', () => {
+        const baseRepo = { owner: 'acme-corp', repo: 'copilot-tools' };
+
+        test('resolveContentPath returns hooks enum value for Hooks with no folder mapping', () => {
+            const path = resolveContentPath(baseRepo, CopilotCategory.Hooks);
+            assert.strictEqual(path, 'hooks');
+        });
+
+        test('FOLDER_PATHS[Hooks] is .github/hooks (local save path)', () => {
+            assert.strictEqual(FOLDER_PATHS[CopilotCategory.Hooks], '.github/hooks');
+        });
+
+        test('resolveContentPath respects custom folder mapping for Hooks', () => {
+            const repoWithMapping = {
+                ...baseRepo,
+                folderMappings: { [CopilotCategory.Hooks]: 'custom/hooks-path' }
+            };
+            const path = resolveContentPath(repoWithMapping, CopilotCategory.Hooks);
+            assert.strictEqual(path, 'custom/hooks-path');
+        });
+
+        test('resolveContentPath returns null when Hooks is explicitly excluded', () => {
+            const repoWithExclusion = {
+                ...baseRepo,
+                folderMappings: { [CopilotCategory.Hooks]: null }
+            };
+            const path = resolveContentPath(repoWithExclusion, CopilotCategory.Hooks);
+            assert.strictEqual(path, null);
+        });
+
+        test('resolveContentPath returns empty string when Hooks mapped to root', () => {
+            const repoWithRoot = {
+                ...baseRepo,
+                folderMappings: { [CopilotCategory.Hooks]: 'root' }
+            };
+            const path = resolveContentPath(repoWithRoot, CopilotCategory.Hooks);
+            assert.strictEqual(path, '');
+        });
+
+        test('resolveContentPath uses enum value for non-hook categories by default', () => {
+            assert.strictEqual(resolveContentPath(baseRepo, CopilotCategory.Instructions), 'instructions');
+            assert.strictEqual(resolveContentPath(baseRepo, CopilotCategory.Prompts), 'prompts');
+            assert.strictEqual(resolveContentPath(baseRepo, CopilotCategory.Agents), 'agents');
         });
     });
 

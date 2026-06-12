@@ -1103,6 +1103,73 @@ async function downloadCopilotItem(item: CopilotItem, githubService: GitHubServi
             return;
         }
 
+        // Hooks are folders - download the entire directory to .github/hooks/<name>/
+        if (item.category === CopilotCategory.Hooks && item.file.type === 'dir') {
+            const folderName = await vscode.window.showInputBox({
+                prompt: `Download hook folder ${item.name} to ${targetFolder}`,
+                value: item.name,
+                validateInput: (value) => {
+                    if (!value || value.trim() === '') {
+                        return 'Folder name cannot be empty';
+                    }
+                    return null;
+                }
+            });
+
+            if (!folderName) {
+                return;
+            }
+
+            const targetHookPath = path.join(fullTargetPath, folderName);
+
+            if (fs.existsSync(targetHookPath)) {
+                const overwrite = await vscode.window.showWarningMessage(
+                    `Hook folder ${folderName} already exists. Do you want to overwrite it?`,
+                    'Overwrite', 'Cancel'
+                );
+                if (overwrite !== 'Overwrite') {
+                    return;
+                }
+                fs.rmSync(targetHookPath, { recursive: true, force: true });
+            }
+
+            fs.mkdirSync(targetHookPath, { recursive: true });
+
+            const contents = await githubService.getDirectoryContents(item.repo, item.file.path);
+
+            for (const fileItem of contents) {
+                if (fileItem.type === 'file') {
+                    const hookFolderPath = item.file.path.endsWith('/') ? item.file.path : item.file.path + '/';
+                    const relativePath = fileItem.path.startsWith(hookFolderPath)
+                        ? fileItem.path.substring(hookFolderPath.length)
+                        : fileItem.path;
+                    const targetFilePath = path.join(targetHookPath, relativePath);
+
+                    const parentDir = path.dirname(targetFilePath);
+                    if (!fs.existsSync(parentDir)) {
+                        fs.mkdirSync(parentDir, { recursive: true });
+                    }
+
+                    const content = await githubService.getFileContent(fileItem.download_url);
+                    fs.writeFileSync(targetFilePath, content, 'utf8');
+                }
+            }
+
+            await downloadTracker.recordDownload(item);
+            githubService.clearCategoryCache(item.repo, item.category);
+
+            const fileCount = contents.filter(f => f.type === 'file').length;
+            const openFolder = await vscode.window.showInformationMessage(
+                `Successfully downloaded hook folder ${folderName} (${fileCount} file(s))`,
+                'Open Folder'
+            );
+
+            if (openFolder === 'Open Folder') {
+                await vscode.commands.executeCommand('revealInExplorer', vscode.Uri.file(targetHookPath));
+            }
+            return;
+        }
+
         // Skills are folders - handle them differently
         if (item.category === CopilotCategory.Skills && item.file.type === 'dir') {
             // Show input box for folder name confirmation

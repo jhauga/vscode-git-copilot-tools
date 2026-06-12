@@ -340,14 +340,16 @@ export class GitHubService {
                     }
                 }
 
-                // For Skills category, show directories (folders); for other categories, show files
-                // For Plugins category, show directories (each plugin is a directory)
+                // Skills, Plugins, and Hooks are directory-based categories
                 const files = (response.data as GitHubFile[])
                     .filter((file: GitHubFile) => {
                         if (category === CopilotCategory.Skills) {
                             return file.type === 'dir';
                         }
                         if (category === CopilotCategory.Plugins) {
+                            return file.type === 'dir';
+                        }
+                        if (category === CopilotCategory.Hooks) {
                             return file.type === 'dir';
                         }
                         return file.type === 'file';
@@ -508,14 +510,16 @@ export class GitHubService {
                 }
             }
 
-            // For Skills category, show directories (folders); for other categories, show files
-            // For Plugins category, show only .yml files
+            // Skills, Plugins, and Hooks are directory-based categories
             const files = (response.data as GitHubFile[])
                 .filter((file: GitHubFile) => {
                     if (category === CopilotCategory.Skills) {
                         return file.type === 'dir';
                     }
                     if (category === CopilotCategory.Plugins) {
+                        return file.type === 'dir';
+                    }
+                    if (category === CopilotCategory.Hooks) {
                         return file.type === 'dir';
                     }
                     return file.type === 'file';
@@ -557,7 +561,13 @@ export class GitHubService {
                 timeout: 10000,
                 headers: headers,
                 // For enterprise GitHub, allow cookies for authentication
-                withCredentials: isEnterprise
+                withCredentials: isEnterprise,
+                // Always treat the raw file response as text. Without this, axios will
+                // auto-parse responses with a JSON content-type (e.g. hook .json files
+                // served from raw.githubusercontent.com) into an object, which then
+                // fails to write to disk as a string.
+                responseType: 'text',
+                transformResponse: [(data: any) => data]
             };
 
             // Apply SSL configuration for enterprise GitHub
@@ -591,7 +601,17 @@ export class GitHubService {
             } else {
                 response = await axios.get(downloadUrl, axiosConfig);
             }
-            return response.data;
+            // Defensive: if a custom interceptor or future change ever bypasses
+            // the responseType override, coerce non-string payloads back to a
+            // string so callers writing to disk don't blow up.
+            const data = response.data;
+            if (typeof data === 'string') {
+                return data;
+            }
+            if (Buffer.isBuffer(data)) {
+                return data.toString('utf8');
+            }
+            return JSON.stringify(data);
         } catch (error) {
             getLogger().error('Failed to fetch file content:', error);
             throw new Error(`Failed to fetch file content: ${error}`);

@@ -72,6 +72,14 @@ export class VscodeGitCopilotToolsTreeItem extends vscode.TreeItem {
                 this.iconPath = isDownloaded
                     ? new vscode.ThemeIcon('package', downloadedColor)
                     : new vscode.ThemeIcon('package');
+            } else if (copilotItem.category === CopilotCategory.Hooks && copilotItem.file.type === 'dir') {
+                this.description = hasUpdate ? '🔄 Update Available' : 'Hook Folder';
+                this.tooltip = new vscode.MarkdownString(
+                    `**${copilotItem.name}**\n\nType: Hook Folder\nRepo: ${copilotItem.repo ? copilotItem.repo.owner + '/' + copilotItem.repo.repo : ''}${hasUpdate ? '\n\n⚠️ **Update Available** - A newer version is available on the remote repository.' : ''}\n\nClick to preview or download entire hook folder`
+                );
+                this.iconPath = isDownloaded
+                    ? new vscode.ThemeIcon('zap', downloadedColor)
+                    : new vscode.ThemeIcon('zap');
             } else {
                 this.resourceUri = vscode.Uri.parse(copilotItem.file.download_url);
                 this.description = hasUpdate
@@ -107,6 +115,12 @@ export class VscodeGitCopilotToolsTreeItem extends vscode.TreeItem {
                         break;
                     case CopilotCategory.Skills:
                         baseIconId = 'tools';
+                        break;
+                    case CopilotCategory.Cookbook:
+                        baseIconId = 'notebook';
+                        break;
+                    case CopilotCategory.Hooks:
+                        baseIconId = 'zap';
                         break;
                     default:
                         baseIconId = 'file';
@@ -235,7 +249,7 @@ export class VscodeGitCopilotToolsProvider implements vscode.TreeDataProvider<Vs
         }
 
         const repoData = this.repoItems.get(repoKey)!;
-        const categories = [CopilotCategory.Plugins, CopilotCategory.Instructions, CopilotCategory.Prompts, CopilotCategory.Agents, CopilotCategory.Skills, CopilotCategory.Workflows];
+        const categories = [CopilotCategory.Plugins, CopilotCategory.Instructions, CopilotCategory.Prompts, CopilotCategory.Agents, CopilotCategory.Skills, CopilotCategory.Workflows, CopilotCategory.Cookbook, CopilotCategory.Hooks];
 
         const allItems: CopilotItem[] = [];
 
@@ -380,6 +394,22 @@ export class VscodeGitCopilotToolsProvider implements vscode.TreeDataProvider<Vs
                     'category',
                     undefined,
                     CopilotCategory.Workflows,
+                    element.repo
+                ),
+                new VscodeGitCopilotToolsTreeItem(
+                    CATEGORY_LABELS[CopilotCategory.Cookbook],
+                    vscode.TreeItemCollapsibleState.Collapsed,
+                    'category',
+                    undefined,
+                    CopilotCategory.Cookbook,
+                    element.repo
+                ),
+                new VscodeGitCopilotToolsTreeItem(
+                    CATEGORY_LABELS[CopilotCategory.Hooks],
+                    vscode.TreeItemCollapsibleState.Collapsed,
+                    'category',
+                    undefined,
+                    CopilotCategory.Hooks,
                     element.repo
                 )
             ];
@@ -557,7 +587,7 @@ export class VscodeGitCopilotToolsProvider implements vscode.TreeDataProvider<Vs
         }
 
         const repos = RepoStorage.getSources(this.context);
-        const categories = [CopilotCategory.Plugins, CopilotCategory.Instructions, CopilotCategory.Prompts, CopilotCategory.Agents, CopilotCategory.Skills, CopilotCategory.Workflows];
+        const categories = [CopilotCategory.Plugins, CopilotCategory.Instructions, CopilotCategory.Prompts, CopilotCategory.Agents, CopilotCategory.Skills, CopilotCategory.Workflows, CopilotCategory.Cookbook, CopilotCategory.Hooks];
 
         // Collect all items for update checking
         const allItems: CopilotItem[] = [];

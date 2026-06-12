@@ -1,6 +1,6 @@
 # Git Copilot Tools
 
-A [Microsoft Visual Studio Code](https://code.visualstudio.com/) (*VS Code*) extension that allows you to browse, preview, and download GitHub Copilot customizations. The default repository is [github/awesome-copilot](https://github.com/github/awesome-copilot), but other repositories with VS Code Copilot `agent`, `instruction`, `plugin`, `prompt`, and `skill` tools can be used.
+A [Microsoft Visual Studio Code](https://code.visualstudio.com/) (*VS Code*) extension that allows you to browse, preview, and download GitHub Copilot customizations. The default repository is [github/awesome-copilot](https://github.com/github/awesome-copilot), but other repositories with VS Code Copilot `agent`, `cookbook`, `hook`, `instruction`, `plugin`, `prompt`, `skill`, and `workflow` tools can be used.
 
 This tool is a slight variation of [timheuer/vscode-awesome-copilot](https://github.com/timheuer/vscode-awesome-copilot) VS Code extension.
 
@@ -12,7 +12,7 @@ PENDING_APPROVAL
 
 ## Features
 
-- **🔍 Browse**: Explore agents, instructions, plugins, prompts, and skills in a convenient tree view
+- **🔍 Browse**: Explore agents, cookbook, hooks, instructions, plugins, prompts, skills, and workflows in a convenient tree view
 - **� Search**: Quickly find files with real-time filtering across all categories
 - **📖 Preview**: View file content before downloading
 - **⬇️ Download**: Save files to appropriate `.github/` folders in your workspace
@@ -27,7 +27,7 @@ PENDING_APPROVAL
 
 1. **Open the Extension**: Click the Activity Bar icon, or use the view under Explorer.
 2. **Search Files**: Use the search bar at the top to filter files across all categories in real-time
-3. **Browse Categories**: Expand Plugins, Instructions, Prompts, Agents, or Skills sections
+3. **Browse Categories**: Expand Agents, Cookbook, Hooks, Instructions, Plugins, Prompts, Skills, or Workflows sections
 4. **Preview Content**: Click the preview icon on any file to see its content
 5. **Download Files**: Click the download icon to save files to your workspace
 6. **Refresh Data**: Click the refresh icon in the view title to update repository data
@@ -36,11 +36,14 @@ PENDING_APPROVAL
 
 Downloaded files are organized in your workspace as follows:
 
-- **Agents**  → `.github/agents/`
+- **Agents**       → `.github/agents/`
+- **Cookbook**     → `.github/cookbook/`
+- **Hooks**        → `.github/hooks/`
 - **Instructions** → `.github/instructions/`
 - **Plugins**      → `.github/plugins/`
-- **Prompts** → `.github/prompts/`
-- **Skills**  → `.github/skills/` (*entire folders with SKILL.md and supporting files*)
+- **Prompts**      → `.github/prompts/`
+- **Skills**       → `.github/skills/` (*entire folders with SKILL.md and supporting files*)
+- **Workflows**    → `.github/workflows/`
 
 These folders will be created automatically if they don't exist.
 
@@ -60,7 +63,7 @@ regardless of its directory layout.
 ### Automatic Configuration via UI
 
 When you add a new source repository through **Manage Sources > Add Repository** and none of
-the standard category folders (`agents`, `instructions`, `plugins`, `prompts`, `skills`) are
+the standard category folders (`agents`, `cookbook`, `hooks`, `instructions`, `plugins`, `prompts`, `skills`, `workflows`) are
 found, the extension thows message box that will allow you to opens a configuration panel
 where you can manually map repository folders to categories.
 

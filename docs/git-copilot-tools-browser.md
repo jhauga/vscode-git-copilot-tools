@@ -2,12 +2,12 @@
 
 ## Overview
 
-A VS Code extension that provides an explorer view to browse, preview, and download GitHub Copilot customizations (agents, instructions, plugins, prompts, and skills) from configurable GitHub repositories. Users can filter items by filename, preview content, and selectively download files to their workspace with proper GitHub Copilot folder structure. Repositories with non-standard folder layouts can be configured through custom folder-to-category mappings.
+A VS Code extension that provides an explorer view to browse, preview, and download GitHub Copilot customizations (agents, hooks, instructions, plugins, prompts, and skills) from configurable GitHub repositories. Users can filter items by filename, preview content, and selectively download files to their workspace with proper GitHub Copilot folder structure. Repositories with non-standard folder layouts can be configured through custom folder-to-category mappings.
 
 ## User Journey
 
 1. **Open Explorer View**: User opens the "Git Copilot Tools" view in the VS Code Activity Bar
-2. **Browse Categories**: User sees five expandable sections: Plugins, Instructions, Prompts, Agents, and Skills
+2. **Browse Categories**: User sees expandable sections: Plugins, Instructions, Prompts, Agents, Skills, Hooks, Workflows, and Cookbook
 3. **Search Content**: User types in search bar to filter items across all categories by filename in real-time
 4. **Preview Item**: User clicks on an item to see name and content preview
 5. **Select for Download**: User clicks download button on desired item
@@ -20,7 +20,7 @@ A VS Code extension that provides an explorer view to browse, preview, and downl
    - **Description**: Display a new tree view in VS Code Activity Bar titled "Git Copilot Tools"
    - **Acceptance Criteria**:
      - [x] Tree view appears in Activity Bar with a dedicated view container
-     - [x] View shows five main categories: Plugins, Instructions, Prompts, Agents, and Skills
+     - [x] View shows categories: Plugins, Instructions, Prompts, Agents, Skills, Hooks, Workflows, and Cookbook
      - [x] Each category is expandable/collapsible
      - [x] View persists across VS Code sessions
 
@@ -28,6 +28,7 @@ A VS Code extension that provides an explorer view to browse, preview, and downl
    - **Description**: Fetch file listings from configurable GitHub repositories
    - **Acceptance Criteria**:
      - [x] Extension fetches files from plugins/, instructions/, prompts/, agents/, and skills/ folders
+     - [x] Hooks are fetched from `.github/hooks/` per the GitHub Copilot convention
      - [x] Data is cached locally for performance
      - [x] Manual refresh button updates cached data
      - [x] Graceful error handling for network failures
@@ -60,6 +61,7 @@ A VS Code extension that provides an explorer view to browse, preview, and downl
      - [x] Prompts save to `.github/prompts/`
      - [x] Agents save to `.github/agents/`
      - [x] Skills save to `.github/skills/`
+     - [x] Hooks save to `.github/hooks/`
      - [x] Creates folders if they don't exist
 
 6. **FR-06**: Download Confirmation
@@ -82,7 +84,7 @@ A VS Code extension that provides an explorer view to browse, preview, and downl
    - **Description**: Configure custom folder-to-category mappings for repositories with non-standard layouts
    - **Acceptance Criteria**:
      - [x] When adding a repo with no standard folders, extension prompts to configure mappings
-     - [x] Webview panel shows one input per category (agents, instructions, plugins, prompts, skills)
+     - [x] Webview panel shows one input per category (agents, hooks, instructions, plugins, prompts, skills)
      - [x] Support `root` value to treat repo root as a single category source
      - [x] Support `null` value to exclude a category
      - [x] Support custom folder paths (e.g., `src/my-prompts`)

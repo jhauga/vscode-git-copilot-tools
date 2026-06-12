@@ -44,7 +44,9 @@ export enum CopilotCategory {
     Prompts = 'prompts',
     Agents = 'agents',
     Skills = 'skills',
-    Workflows = 'workflows'
+    Workflows = 'workflows',
+    Cookbook = 'cookbook',
+    Hooks = 'hooks'
 }
 
 
@@ -62,7 +64,9 @@ export const CATEGORY_LABELS: Record<CopilotCategory, string> = {
     [CopilotCategory.Prompts]: 'Prompts',
     [CopilotCategory.Agents]: 'Agents',
     [CopilotCategory.Skills]: 'Skills',
-    [CopilotCategory.Workflows]: 'Workflows'
+    [CopilotCategory.Workflows]: 'Workflows',
+    [CopilotCategory.Cookbook]: 'Cookbook',
+    [CopilotCategory.Hooks]: 'Hooks'
 };
 
 export const FOLDER_PATHS: Record<CopilotCategory, string> = {
@@ -71,7 +75,9 @@ export const FOLDER_PATHS: Record<CopilotCategory, string> = {
     [CopilotCategory.Prompts]: '.github/prompts',
     [CopilotCategory.Agents]: '.github/agents',
     [CopilotCategory.Skills]: '.github/skills',
-    [CopilotCategory.Workflows]: '.github/workflows'
+    [CopilotCategory.Workflows]: '.github/workflows',
+    [CopilotCategory.Cookbook]: '.github/cookbook',
+    [CopilotCategory.Hooks]: '.github/hooks'
 };
 
 // Path to plugin.json within a plugin directory
