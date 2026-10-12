@@ -32,6 +32,8 @@ following properties:
 | `repo` | `string` | Yes | GitHub repository name |
 | `label` | `string` | No | Display name shown in the tree view |
 | `baseUrl` | `string` | No | GitHub Enterprise Server base URL (e.g., `https://github.example.com`) |
+| `branch` | `string` | No | Branch, tag, or commit SHA to read content from. The repository's default branch is used when omitted. |
+| `aiFolder` | `string` | No | Folder that tools from this repository are saved under, relative to the workspace (see below). Default: `.github` |
 | `folderMappings` | `object` | No | Custom folder-to-category mappings (see below) |
 
 #### `folderMappings`
@@ -44,12 +46,14 @@ Each property in `folderMappings` corresponds to a content category:
 
 | Property | Type | Description |
 |---|---|---|
-| `agents` | `string \| null` | Path to agents content, `"root"`, or `null` to exclude |
-| `hooks` | `string \| null` | Path to hooks content, `"root"`, or `null` to exclude |
-| `instructions` | `string \| null` | Path to instructions content, `"root"`, or `null` to exclude |
-| `plugins` | `string \| null` | Path to plugins content, `"root"`, or `null` to exclude |
-| `prompts` | `string \| null` | Path to prompts content, `"root"`, or `null` to exclude |
-| `skills` | `string \| null` | Path to skills content, `"root"`, or `null` to exclude |
+| `agents` | `string \| string[] \| null` | Path to agents content, `"root"`, an array of folders, or `null` to exclude |
+| `cookbook` | `string \| string[] \| null` | Path to cookbook content, `"root"`, an array of folders, or `null` to exclude |
+| `hooks` | `string \| string[] \| null` | Path to hooks content, `"root"`, an array of folders, or `null` to exclude |
+| `instructions` | `string \| string[] \| null` | Path to instructions content, `"root"`, an array of folders, or `null` to exclude |
+| `plugins` | `string \| string[] \| null` | Path to plugins content, `"root"`, an array of folders, or `null` to exclude |
+| `prompts` | `string \| string[] \| null` | Path to prompts content, `"root"`, an array of folders, or `null` to exclude |
+| `skills` | `string \| string[] \| null` | Path to skills content, `"root"`, an array of folders, or `null` to exclude |
+| `workflows` | `string \| string[] \| null` | Path to workflows content, `"root"`, an array of folders, or `null` to exclude |
 
 **Special values:**
 
@@ -58,6 +62,10 @@ Each property in `folderMappings` corresponds to a content category:
   contains a single type of content.
 - `null` - The category is excluded entirely. It will not appear in the tree view and no API
   requests will be made for it.
+- An array of folders - The category is read from each folder in the order listed. `"."` or `"/"`
+  in the array is the repository root, and the root entry does not list the other folders of the
+  same array as tools. Items are shown as `folder/name` in the tree view. An empty array excludes
+  the category, the same as `null`.
 - *(omitted)* - Uses the default path, which is the category name (e.g., `prompts`).
 
 **Example: Standard repository (no custom mappings needed)**
@@ -109,6 +117,22 @@ Each property in `folderMappings` corresponds to a content category:
 }
 ```
 
+**Example: Skills spread across several folders**
+
+```json
+{
+  "vscode-git-copilot-tools.repositories": [
+    {
+      "owner": "acme-corp",
+      "repo": "copilot-skills",
+      "folderMappings": {
+        "skills": ["frontend", "backend", "."]
+      }
+    }
+  ]
+}
+```
+
 **Example: GitHub Enterprise repository**
 
 ```json
@@ -146,6 +170,27 @@ Each property in `folderMappings` corresponds to a content category:
 }
 ```
 
+#### `aiFolder`
+
+The folder that tools from a repository are saved under, relative to the workspace folder. When
+omitted, tools are saved under `.github`. The category folders keep their names inside it.
+
+```json
+{
+  "vscode-git-copilot-tools.repositories": [
+    {
+      "owner": "acme-corp",
+      "repo": "copilot-tools",
+      "aiFolder": ".claude"
+    }
+  ]
+}
+```
+
+With this source, a skill is saved to `.claude/skills/<skill>/` and an agent to
+`.claude/agents/<agent>`. Absolute paths, such as `C:\Users\demo-user\ai` or `/opt/ai`, are
+ignored and `.github` is used instead, so downloads always stay inside the workspace.
+
 ---
 
 ### `vscode-git-copilot-tools.enterpriseToken`
@@ -154,7 +199,8 @@ Each property in `folderMappings` corresponds to a content category:
 **Default:** `""`
 
 Personal Access Token for authenticating with GitHub Enterprise Server. Required when browsing
-content from an Enterprise GitHub instance.
+content from an Enterprise GitHub instance. The token is sent only to sources that have a
+`baseUrl`.
 
 **Required token permissions:** `repo`, `read:org`, `read:user`
 
@@ -203,7 +249,8 @@ always available.
 > servers only. Only enable for trusted enterprise environments with self-signed certificates.
 
 When enabled, the extension will accept self-signed or untrusted TLS certificates when
-communicating with Enterprise GitHub servers. Public GitHub (github.com) is unaffected.
+communicating with Enterprise GitHub servers. Public GitHub (github.com) is unaffected. Changes
+take effect immediately.
 
 ---
 
@@ -215,7 +262,9 @@ communicating with Enterprise GitHub servers. Public GitHub (github.com) is unaf
 Enable GitHub authentication via VS Code's built-in GitHub OAuth provider. This increases API
 rate limits from 60 requests/hour (unauthenticated) to 5,000 requests/hour (authenticated).
 
-The extension will prompt for sign-in when authentication is needed.
+The session is used only for github.com sources; GitHub Enterprise sources use
+`enterpriseToken`. When no session exists, the extension offers sign-in once per VS Code
+session, and again when GitHub refuses a request that signing in would allow.
 
 ---
 
@@ -243,8 +292,7 @@ Controls the verbosity of log output in the Output panel.
 **Default:** `true`
 
 When enabled, the extension checks whether downloaded items have newer versions available in
-the source repository. Items with updates are indicated with a cloud-download icon in the
-tree view.
+the source repository. Items with updates show **Update Available** in the tree view.
 
 ## Download Folder Structure
 
@@ -253,15 +301,22 @@ Downloaded content is saved to the workspace under the following paths:
 | Category | Local Path |
 |---|---|
 | Agents | `.github/agents` |
+| Cookbook | `.github/cookbook` |
 | Hooks | `.github/hooks` |
 | Instructions | `.github/instructions` |
 | Plugins | `.github/plugins` |
 | Prompts | `.github/prompts` |
 | Skills | `.github/skills` |
+| Workflows | `.github/workflows` |
 
-Folders are created automatically if they do not exist. The local save paths are fixed
-regardless of any custom `folderMappings` configured for the source repository;
-`folderMappings` only control where content is fetched *from*, not where it is saved.
+Folders are created automatically if they do not exist. `folderMappings` only control where
+content is fetched *from*. Where it is saved is set per repository by `aiFolder`, which replaces
+`.github` in these paths.
+
+Downloading a plugin saves each agent, skill, hook, instruction, and prompt its manifest lists
+to the folders above, and saves the plugin's own files to `plugins/<plugin>/`. The manifest is
+`plugin.json` at the root of the plugin folder, or `.github/plugin/plugin.json` in repositories
+that use the earlier layout. Copilot extensions listed by a plugin are not downloaded.
 
 ## Installing Hooks
 
@@ -283,7 +338,8 @@ for the full schema.
 
 When adding a repository that does not contain any of the standard category folders, the
 extension opens a webview panel titled **Specify Path to Folders**. The panel provides one
-input field per category.
+input field for each of the eight categories, and each field takes one folder. To read a
+category from several folders, set an array for it in `folderMappings` in `settings.json`.
 
 **Input rules:**
 

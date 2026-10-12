@@ -3,10 +3,78 @@ import * as assert from 'assert';
 // You can import and use all API from the 'vscode' module
 // as well as import your extension to test it
 import * as vscode from 'vscode';
-import { GitHubService } from '../githubService';
-import { CopilotCategory, FOLDER_PATHS, resolveContentPath } from '../types';
+import { GitHubService, classifyAuthFailure } from '../githubService';
+import { DownloadMetadata, DownloadTracker } from '../downloadTracker';
+import { EngineSettings, parseRepositoryInput, toRepositorySources } from '../repoStorage';
+import { CopilotItem, GitHubApiError, ORDERED_CATEGORIES, RepositorySource } from '../types';
 import { extractSlashCommands, generateNoteContent } from '../views/note.vscode-git-copilot-tools';
 import * as logger from '../logger';
+
+const EXTENSION_ID = 'jhauga.vscode-git-copilot-tools';
+const CONFIG_SECTION = 'vscode-git-copilot-tools';
+const DOWNLOADS_KEY = 'vscodeGitCopilotTools.downloads';
+
+/** An extension context whose globalState lives in memory. */
+function createContext(values: Record<string, unknown> = {}): vscode.ExtensionContext {
+    const store = new Map<string, unknown>(Object.entries(values));
+    const globalState = {
+        keys: () => [...store.keys()],
+        get: (key: string, defaultValue?: unknown) => (store.has(key) ? store.get(key) : defaultValue),
+        update: async (key: string, value: unknown) => {
+            if (value === undefined) {
+                store.delete(key);
+            } else {
+                store.set(key, value);
+            }
+        },
+        setKeysForSync: () => undefined
+    };
+    return { globalState } as unknown as vscode.ExtensionContext;
+}
+
+function engineSettings(overrides: Partial<EngineSettings> = {}): EngineSettings {
+    return {
+        cacheTimeout: 3600000,
+        enterpriseToken: '',
+        allowInsecureEnterpriseCerts: false,
+        enableGithubAuth: true,
+        ...overrides
+    };
+}
+
+/** A download record as an earlier version stored it. */
+function oldRecord(overrides: Partial<DownloadMetadata> = {}): DownloadMetadata {
+    return {
+        itemId: 'agents-helper.agent.md-acme-corp-copilot-tools',
+        itemName: 'helper.agent.md',
+        category: 'agents',
+        repoOwner: 'acme-corp',
+        repoName: 'copilot-tools',
+        downloadTimestamp: 1000,
+        sha: 'a'.repeat(64),
+        size: 120,
+        downloadUrl: 'https://raw.example.com/agents/helper.agent.md',
+        ...overrides
+    };
+}
+
+function agentItem(file: Partial<CopilotItem['file']> = {}): CopilotItem {
+    return {
+        id: 'acme-corp/copilot-tools/agents/helper.agent.md',
+        name: 'helper.agent.md',
+        category: 'agents',
+        repo: { owner: 'acme-corp', repo: 'copilot-tools' },
+        file: {
+            name: 'helper.agent.md',
+            path: 'agents/helper.agent.md',
+            type: 'file',
+            download_url: 'https://raw.example.com/agents/helper.agent.md',
+            size: 120,
+            sha: 'b'.repeat(40),
+            ...file
+        }
+    };
+}
 
 let failCount = 0;
 suite('Extension Test Suite', () => {
@@ -18,6 +86,7 @@ suite('Extension Test Suite', () => {
         warn: () => {},
         info: () => {},
         debug: () => {},
+        trace: () => {},
         dispose: () => {}
     };
 
@@ -25,7 +94,7 @@ suite('Extension Test Suite', () => {
     suiteSetup(async () => {
         (logger as any).getLogger = () => mockLogger;
         // Disable GitHub auth for tests to avoid hanging on auth dialog prompts
-        const config = vscode.workspace.getConfiguration('vscode-git-copilot-tools');
+        const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
         await config.update('enableGithubAuth', false, vscode.ConfigurationTarget.Global);
     });
 
@@ -39,7 +108,7 @@ suite('Extension Test Suite', () => {
 
     suiteTeardown(async () => {
         // Restore default auth setting
-        const config = vscode.workspace.getConfiguration('vscode-git-copilot-tools');
+        const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
         await config.update('enableGithubAuth', undefined, vscode.ConfigurationTarget.Global);
         console.log(`  ${failCount} failing`);
     });
@@ -52,445 +121,320 @@ suite('Extension Test Suite', () => {
     test('GitHub Service can be instantiated', () => {
         const service = new GitHubService();
         assert.ok(service);
+        service.dispose();
     });
 
-    test('GitHub Service can fetch plugins', async () => {
-        const service = new GitHubService();
-        try {
-            const files = await service.getFiles(CopilotCategory.Plugins);
-            assert.ok(Array.isArray(files));
-            console.log(`Found ${files.length} plugin files`);
-        } catch (error) {
-            console.warn('Network test failed - this is expected in CI/offline environments:', error);
-        }
-    }).timeout(30000);
+    suite('Activation Tests', () => {
+        // Every category excluded, so activating the extension sends no requests
+        const offlineSource = {
+            owner: 'acme-corp',
+            repo: 'copilot-tools',
+            folderMappings: Object.fromEntries(ORDERED_CATEGORIES.map(category => [category, null]))
+        };
 
-    test('GitHub Service can fetch skills', async () => {
-        const service = new GitHubService();
-        try {
-            const files = await service.getFiles(CopilotCategory.Skills);
-            assert.ok(Array.isArray(files));
-            console.log(`Found ${files.length} skills files`);
-        } catch (error) {
-            console.warn('Network test failed - this is expected in CI/offline environments:', error);
-        }
-    }).timeout(15000);
+        suiteSetup(async () => {
+            await vscode.workspace.getConfiguration(CONFIG_SECTION)
+                .update('repositories', [offlineSource], vscode.ConfigurationTarget.Global);
+        });
 
-    suite('parsePluginJson Tests', () => {
-        let service: GitHubService;
-        const mockRepo = { owner: 'test', repo: 'test-repo' };
+        suiteTeardown(async () => {
+            await vscode.workspace.getConfiguration(CONFIG_SECTION)
+                .update('repositories', undefined, vscode.ConfigurationTarget.Global);
+        });
 
-        // Helper to mock getFileContentByPath
-        function mockFileContent(service: GitHubService, content: string) {
-            (service as any).getFileContentByPath = async () => ({
-                content,
-                download_url: 'http://test-url.com/plugin.json',
-                sha: 'abc123',
-                size: content.length
+        test('activates and registers its commands', async () => {
+            const extension = vscode.extensions.getExtension(EXTENSION_ID);
+            assert.ok(extension, `${EXTENSION_ID} is loaded in the test host`);
+            await extension.activate();
+            assert.strictEqual(extension.isActive, true);
+
+            const commands = await vscode.commands.getCommands(true);
+            for (const command of [
+                'refreshVscodeGitCopilotTools', 'downloadItem', 'previewItem', 'manageSources',
+                'removeRepo', 'refreshRepo', 'configureEnterpriseToken', 'clearEnterpriseToken',
+                'signInToGitHub', 'signOutFromGitHub', 'openRepoInBrowser'
+            ]) {
+                assert.ok(commands.includes(`vscode-git-copilot-tools.${command}`), `${command} is registered`);
+            }
+        }).timeout(60000);
+    });
+
+    suite('Repository Settings Tests', () => {
+        test('drops entries without an owner or a repo', () => {
+            const sources = toRepositorySources([
+                { owner: 'acme-corp' },
+                { repo: 'copilot-tools' },
+                { owner: '  ', repo: 'copilot-tools' },
+                'acme-corp/copilot-tools',
+                null
+            ]);
+            assert.deepStrictEqual(sources, []);
+        });
+
+        test('reads nothing from a value that is not an array', () => {
+            assert.deepStrictEqual(toRepositorySources(undefined), []);
+            assert.deepStrictEqual(toRepositorySources({ owner: 'acme-corp', repo: 'copilot-tools' }), []);
+        });
+
+        test('trims text and removes trailing slashes from baseUrl', () => {
+            const [source] = toRepositorySources([{
+                owner: ' acme-corp ',
+                repo: ' copilot-tools ',
+                label: ' Acme Tools ',
+                baseUrl: 'https://github.example.com//',
+                branch: ' dev '
+            }]);
+            assert.deepStrictEqual(source, {
+                owner: 'acme-corp',
+                repo: 'copilot-tools',
+                label: 'Acme Tools',
+                baseUrl: 'https://github.example.com',
+                branch: 'dev'
             });
-        }
+        });
+
+        test('keeps folder mappings, including arrays, and drops unknown keys', () => {
+            const [source] = toRepositorySources([{
+                owner: 'acme-corp',
+                repo: 'copilot-skills',
+                extra: true,
+                folderMappings: {
+                    skills: ['frontend', '.', 42],
+                    agents: null,
+                    prompts: ' root ',
+                    unknown: 'folder'
+                }
+            }]);
+            assert.deepStrictEqual(source, {
+                owner: 'acme-corp',
+                repo: 'copilot-skills',
+                folderMappings: { agents: null, prompts: 'root', skills: ['frontend', '.'] }
+            });
+        });
+
+        test('keeps a relative aiFolder and ignores an absolute one', () => {
+            const sources = toRepositorySources([
+                { owner: 'acme-corp', repo: 'relative', aiFolder: '.claude' },
+                { owner: 'acme-corp', repo: 'drive', aiFolder: 'C:\\Users\\demo-user\\ai' },
+                { owner: 'acme-corp', repo: 'posix', aiFolder: '/opt/ai' },
+                { owner: 'acme-corp', repo: 'home', aiFolder: '~/ai' }
+            ]);
+            assert.deepStrictEqual(sources.map(source => source.aiFolder), ['.claude', undefined, undefined, undefined]);
+        });
+    });
+
+    suite('Repository Input Tests', () => {
+        test('reads owner/repo and drops a .git suffix', () => {
+            assert.deepStrictEqual(parseRepositoryInput('acme-corp/copilot-tools'), { owner: 'acme-corp', repo: 'copilot-tools' });
+            assert.deepStrictEqual(parseRepositoryInput(' acme-corp/copilot-tools.git '), { owner: 'acme-corp', repo: 'copilot-tools' });
+        });
+
+        test('reads the branch from a /tree/ URL', () => {
+            assert.deepStrictEqual(
+                parseRepositoryInput('https://github.com/acme-corp/copilot-tools/tree/dev'),
+                { owner: 'acme-corp', repo: 'copilot-tools', branch: 'dev' }
+            );
+        });
+
+        test('sets baseUrl for a GitHub Enterprise URL', () => {
+            assert.deepStrictEqual(
+                parseRepositoryInput('https://github.example.com/acme-corp/copilot-tools'),
+                { owner: 'acme-corp', repo: 'copilot-tools', baseUrl: 'https://github.example.com' }
+            );
+        });
+
+        test('ignores a query and a fragment', () => {
+            assert.deepStrictEqual(
+                parseRepositoryInput('https://github.com/acme-corp/copilot-tools?tab=readme#usage'),
+                { owner: 'acme-corp', repo: 'copilot-tools' }
+            );
+        });
+
+        test('rejects input that names no repository', () => {
+            for (const input of ['copilot-tools', 'https://github.com/acme-corp', '', '   ']) {
+                assert.strictEqual(parseRepositoryInput(input), undefined, `'${input}'`);
+            }
+        });
+    });
+
+    suite('Token Resolution Tests', () => {
+        const publicRepo: RepositorySource = { owner: 'acme-corp', repo: 'copilot-tools' };
+        const enterpriseRepo: RepositorySource = { owner: 'acme-corp', repo: 'copilot-tools', baseUrl: 'https://github.example.com' };
+        const authentication = vscode.authentication as unknown as { getSession: unknown };
+        const originalGetSession = authentication.getSession;
+        let sessionLookups = 0;
+        let service: GitHubService;
 
         setup(() => {
+            sessionLookups = 0;
+            authentication.getSession = async () => {
+                sessionLookups++;
+                return { id: 'test', accessToken: 'session-token', account: { id: 'demo', label: 'demo-user' }, scopes: ['repo'] };
+            };
             service = new GitHubService();
         });
 
-        test('should parse valid JSON with all required fields', async () => {
-            const validJson = JSON.stringify({
-                name: "Test Plugin",
-                description: "A test plugin for validation",
-                version: "1.0.0",
-                author: { name: "Test Author" },
-                tags: ["test", "sample"],
-                items: [
-                    { path: "instructions/test.instructions.md", kind: "instruction" },
-                    { path: "prompts/sample.prompt.md", kind: "prompt" }
-                ],
-                display: { ordering: "alpha", show_badge: true }
-            });
-
-            mockFileContent(service, validJson);
-
-            const result = await service.parsePluginJson(mockRepo, 'plugins/test-plugin');
-
-            // id should be derived from directory name
-            assert.strictEqual(result.metadata.id, 'test-plugin');
-            assert.strictEqual(result.metadata.name, 'Test Plugin');
-            assert.strictEqual(result.metadata.description, 'A test plugin for validation');
-            assert.strictEqual(result.metadata.version, '1.0.0');
-            assert.strictEqual(result.metadata.author?.name, 'Test Author');
-            assert.ok(Array.isArray(result.metadata.items));
-            assert.strictEqual(result.metadata.items.length, 2);
-            assert.strictEqual(result.metadata.items[0].path, 'instructions/test.instructions.md');
-            assert.strictEqual(result.metadata.items[0].kind, 'instruction');
-            assert.strictEqual(result.rawContent, validJson);
+        teardown(() => {
+            authentication.getSession = originalGetSession;
+            service.dispose();
         });
 
-        test('should use id from JSON when present', async () => {
-            const validJson = JSON.stringify({
-                id: "custom-id",
-                name: "Test Plugin",
-                description: "A test plugin",
-                items: [{ path: "prompts/test.md", kind: "prompt" }]
-            });
-
-            mockFileContent(service, validJson);
-
-            const result = await service.parsePluginJson(mockRepo, 'plugins/test-plugin');
-
-            assert.strictEqual(result.metadata.id, 'custom-id');
+        test('uses the VS Code session for a github.com source', async () => {
+            assert.strictEqual(await service.resolveToken(publicRepo, engineSettings()), 'session-token');
         });
 
-        test('should reject JSON missing name field', async () => {
-            const invalidJson = JSON.stringify({
-                description: "A test plugin",
-                items: [{ path: "test.md", kind: "instruction" }]
-            });
-
-            mockFileContent(service, invalidJson);
-
-            await assert.rejects(
-                async () => await service.parsePluginJson(mockRepo, 'plugins/test-plugin'),
-                (error: Error) => {
-                    assert.ok(error.message.includes('Failed to parse plugin.json'));
-                    assert.ok(error.message.includes('missing or invalid "name" field'));
-                    return true;
-                }
-            );
+        test('sends no token when GitHub authentication is off', async () => {
+            assert.strictEqual(await service.resolveToken(publicRepo, engineSettings({ enableGithubAuth: false })), undefined);
+            assert.strictEqual(sessionLookups, 0);
         });
 
-        test('should reject JSON with empty name field', async () => {
-            const invalidJson = JSON.stringify({
-                name: "   ",
-                description: "A test plugin",
-                items: [{ path: "test.md", kind: "instruction" }]
-            });
-
-            mockFileContent(service, invalidJson);
-
-            await assert.rejects(
-                async () => await service.parsePluginJson(mockRepo, 'plugins/test-plugin'),
-                (error: Error) => {
-                    assert.ok(error.message.includes('Failed to parse plugin.json'));
-                    assert.ok(error.message.includes('missing or invalid "name" field'));
-                    return true;
-                }
-            );
+        test('uses the enterprise token for a GitHub Enterprise source', async () => {
+            const settings = engineSettings({ enterpriseToken: 'enterprise-token', enableGithubAuth: false });
+            assert.strictEqual(await service.resolveToken(enterpriseRepo, settings), 'enterprise-token');
         });
 
-        test('should reject JSON missing description field', async () => {
-            const invalidJson = JSON.stringify({
-                name: "Test Plugin",
-                items: [{ path: "test.md", kind: "instruction" }]
-            });
-
-            mockFileContent(service, invalidJson);
-
-            await assert.rejects(
-                async () => await service.parsePluginJson(mockRepo, 'plugins/test-plugin'),
-                (error: Error) => {
-                    assert.ok(error.message.includes('Failed to parse plugin.json'));
-                    assert.ok(error.message.includes('missing or invalid "description" field'));
-                    return true;
-                }
-            );
+        test('never sends the github.com session to a GitHub Enterprise host', async () => {
+            assert.strictEqual(await service.resolveToken(enterpriseRepo, engineSettings()), undefined);
+            assert.strictEqual(sessionLookups, 0);
         });
 
-        test('should reject JSON with empty description field', async () => {
-            const invalidJson = JSON.stringify({
-                name: "Test Plugin",
-                description: "",
-                items: [{ path: "test.md", kind: "instruction" }]
-            });
-
-            mockFileContent(service, invalidJson);
-
-            await assert.rejects(
-                async () => await service.parsePluginJson(mockRepo, 'plugins/test-plugin'),
-                (error: Error) => {
-                    assert.ok(error.message.includes('Failed to parse plugin.json'));
-                    assert.ok(error.message.includes('missing or invalid "description" field'));
-                    return true;
-                }
-            );
-        });
-
-        test('should reject JSON missing items array', async () => {
-            const invalidJson = JSON.stringify({
-                name: "Test Plugin",
-                description: "A test plugin"
-            });
-
-            mockFileContent(service, invalidJson);
-
-            await assert.rejects(
-                async () => await service.parsePluginJson(mockRepo, 'plugins/test-plugin'),
-                (error: Error) => {
-                    assert.ok(error.message.includes('Failed to parse plugin.json'));
-                    assert.ok(error.message.includes('missing or invalid "items" array'));
-                    return true;
-                }
-            );
-        });
-
-        test('should reject JSON with non-array items field', async () => {
-            const invalidJson = JSON.stringify({
-                name: "Test Plugin",
-                description: "A test plugin",
-                items: "not an array"
-            });
-
-            mockFileContent(service, invalidJson);
-
-            await assert.rejects(
-                async () => await service.parsePluginJson(mockRepo, 'plugins/test-plugin'),
-                (error: Error) => {
-                    assert.ok(error.message.includes('Failed to parse plugin.json'));
-                    assert.ok(error.message.includes('missing or invalid "items" array'));
-                    return true;
-                }
-            );
-        });
-
-        test('should accept JSON with empty items array', async () => {
-            const validJson = JSON.stringify({
-                name: "Test Plugin",
-                description: "A test plugin",
-                items: []
-            });
-
-            mockFileContent(service, validJson);
-
-            const result = await service.parsePluginJson(mockRepo, 'plugins/test-plugin');
-
-            assert.strictEqual(result.metadata.id, 'test-plugin');
-            assert.ok(Array.isArray(result.metadata.items));
-            assert.strictEqual(result.metadata.items.length, 0);
-            assert.strictEqual(result.rawContent, validJson);
-        });
-
-        test('should reject completely invalid JSON', async () => {
-            const invalidJson = 'this is not valid json at all {{{';
-
-            mockFileContent(service, invalidJson);
-
-            await assert.rejects(
-                async () => await service.parsePluginJson(mockRepo, 'plugins/test-plugin'),
-                (error: Error) => {
-                    assert.ok(error.message.includes('Failed to parse plugin.json'));
-                    return true;
-                }
-            );
-        });
-
-        test('should reject null or undefined JSON content', async () => {
-            const invalidJson = 'null';
-
-            mockFileContent(service, invalidJson);
-
-            await assert.rejects(
-                async () => await service.parsePluginJson(mockRepo, 'plugins/test-plugin'),
-                (error: Error) => {
-                    assert.ok(error.message.includes('Failed to parse plugin.json'));
-                    assert.ok(error.message.includes('Invalid plugin.json format'));
-                    return true;
-                }
-            );
-        });
-
-        test('should parse JSON with optional fields', async () => {
-            const validJson = JSON.stringify({
-                name: "Test Plugin",
-                description: "A test plugin",
-                version: "2.0.0",
-                author: { name: "Author Name" },
-                repository: "https://github.com/test/repo",
-                license: "MIT",
-                featured: true,
-                tags: ["testing", "sample", "demo"],
-                items: [
-                    { path: "instructions/test.instructions.md", kind: "instruction" }
-                ],
-                display: { ordering: "custom", show_badge: false }
-            });
-
-            mockFileContent(service, validJson);
-
-            const result = await service.parsePluginJson(mockRepo, 'plugins/test-plugin');
-
-            assert.ok(result.metadata.tags);
-            assert.strictEqual(result.metadata.tags!.length, 3);
-            assert.strictEqual(result.metadata.tags![0], 'testing');
-            assert.strictEqual(result.metadata.version, '2.0.0');
-            assert.strictEqual(result.metadata.author?.name, 'Author Name');
-            assert.strictEqual(result.metadata.repository, 'https://github.com/test/repo');
-            assert.strictEqual(result.metadata.license, 'MIT');
-            assert.strictEqual(result.metadata.featured, true);
-            assert.ok(result.metadata.display);
-            assert.strictEqual(result.metadata.display!.ordering, 'custom');
-            assert.strictEqual(result.metadata.display!.show_badge, false);
-            assert.strictEqual(result.rawContent, validJson);
-        });
-
-        test('should handle multiple items with different kinds', async () => {
-            const validJson = JSON.stringify({
-                name: "Multi-Kind Plugin",
-                description: "Plugin with multiple item kinds",
-                items: [
-                    { path: "instructions/test.instructions.md", kind: "instruction" },
-                    { path: "prompts/sample.prompt.md", kind: "prompt" },
-                    { path: "agents/helper.agent.md", kind: "agent" },
-                    { path: "skills/analyzer", kind: "skill" }
-                ]
-            });
-
-            mockFileContent(service, validJson);
-
-            const result = await service.parsePluginJson(mockRepo, 'plugins/multi-kind');
-
-            assert.strictEqual(result.metadata.id, 'multi-kind');
-            assert.ok(Array.isArray(result.metadata.items));
-            assert.strictEqual(result.metadata.items!.length, 4);
-            assert.strictEqual(result.metadata.items![0].kind, 'instruction');
-            assert.strictEqual(result.metadata.items![1].kind, 'prompt');
-            assert.strictEqual(result.metadata.items![2].kind, 'agent');
-            assert.strictEqual(result.metadata.items![3].kind, 'skill');
-            assert.strictEqual(result.rawContent, validJson);
-        });
-
-        test('should parse current format with agents and skills arrays', async () => {
-            const validJson = JSON.stringify({
-                name: "awesome-copilot",
-                description: "Meta prompts for discovery",
-                version: "1.0.0",
-                author: { name: "Awesome Copilot Community" },
-                repository: "https://github.com/github/awesome-copilot",
-                license: "MIT",
-                keywords: ["github-copilot", "discovery"],
-                agents: ["./agents"],
-                skills: [
-                    "./skills/suggest-awesome-github-copilot-skills",
-                    "./skills/suggest-awesome-github-copilot-instructions"
-                ]
-            });
-
-            mockFileContent(service, validJson);
-
-            const result = await service.parsePluginJson(mockRepo, 'plugins/awesome-copilot');
-
-            assert.strictEqual(result.metadata.id, 'awesome-copilot');
-            assert.strictEqual(result.metadata.name, 'awesome-copilot');
-            assert.ok(Array.isArray(result.metadata.items));
-            // 1 agent dir + 2 skill dirs = 3 items
-            assert.strictEqual(result.metadata.items!.length, 3);
-            // agent item should resolve relative path to repo-relative path
-            assert.strictEqual(result.metadata.items![0].kind, 'agent');
-            assert.strictEqual(result.metadata.items![0].path, 'plugins/awesome-copilot/agents');
-            // skill items should strip ./ and trailing slashes
-            assert.strictEqual(result.metadata.items![1].kind, 'skill');
-            assert.strictEqual(result.metadata.items![1].path, 'plugins/awesome-copilot/skills/suggest-awesome-github-copilot-skills');
-            assert.strictEqual(result.metadata.items![2].kind, 'skill');
-            assert.strictEqual(result.metadata.items![2].path, 'plugins/awesome-copilot/skills/suggest-awesome-github-copilot-instructions');
-        });
-
-        test('should parse current format with only skills (no agents)', async () => {
-            const validJson = JSON.stringify({
-                name: "Skills Only Plugin",
-                description: "A plugin with only skills",
-                skills: [
-                    "./skills/my-skill"
-                ]
-            });
-
-            mockFileContent(service, validJson);
-
-            const result = await service.parsePluginJson(mockRepo, 'plugins/skills-only');
-
-            assert.ok(Array.isArray(result.metadata.items));
-            assert.strictEqual(result.metadata.items!.length, 1);
-            assert.strictEqual(result.metadata.items![0].kind, 'skill');
-            assert.strictEqual(result.metadata.items![0].path, 'plugins/skills-only/skills/my-skill');
-        });
-
-        test('should parse current format with trailing slashes stripped from skill paths', async () => {
-            const validJson = JSON.stringify({
-                name: "Slash Strip Plugin",
-                description: "Tests trailing slash removal",
-                skills: [
-                    "./skills/my-skill/"
-                ]
-            });
-
-            mockFileContent(service, validJson);
-
-            const result = await service.parsePluginJson(mockRepo, 'plugins/slash-strip');
-
-            assert.ok(Array.isArray(result.metadata.items));
-            assert.strictEqual(result.metadata.items![0].path, 'plugins/slash-strip/skills/my-skill');
-        });
-
-        test('should reject current format JSON missing both items and type arrays', async () => {
-            const invalidJson = JSON.stringify({
-                name: "Test Plugin",
-                description: "A test plugin"
-                // No items, no agents, no skills, no instructions, no prompts
-            });
-
-            mockFileContent(service, invalidJson);
-
-            await assert.rejects(
-                async () => await service.parsePluginJson(mockRepo, 'plugins/test-plugin'),
-                (error: Error) => {
-                    assert.ok(error.message.includes('Failed to parse plugin.json'));
-                    assert.ok(error.message.includes('missing or invalid "items" array'));
-                    return true;
-                }
-            );
+        test('keeps the enterprise token away from github.com', async () => {
+            const settings = engineSettings({ enterpriseToken: 'enterprise-token' });
+            assert.strictEqual(await service.resolveToken(publicRepo, settings), 'session-token');
         });
     });
 
-    suite('Hook Path Resolution Tests', () => {
-        const baseRepo = { owner: 'acme-corp', repo: 'copilot-tools' };
+    suite('Authentication Failure Tests', () => {
+        const url = 'https://api.github.com/repos/acme-corp/copilot-tools/contents/skills';
+        const now = Date.UTC(2026, 0, 1, 12, 0, 0);
 
-        test('resolveContentPath returns hooks enum value for Hooks with no folder mapping', () => {
-            const path = resolveContentPath(baseRepo, CopilotCategory.Hooks);
-            assert.strictEqual(path, 'hooks');
+        test('403 with no requests remaining is a rate limit, with the minutes until reset', () => {
+            const error = new GitHubApiError('rate limited', 403, url, { remaining: 0, reset: new Date(now + 10 * 60000) });
+            assert.deepStrictEqual(classifyAuthFailure(error, now), { kind: 'rate-limit', resetsInMinutes: 10 });
         });
 
-        test('FOLDER_PATHS[Hooks] is .github/hooks (local save path)', () => {
-            assert.strictEqual(FOLDER_PATHS[CopilotCategory.Hooks], '.github/hooks');
+        test('429 is a rate limit', () => {
+            assert.deepStrictEqual(classifyAuthFailure(new GitHubApiError('too many requests', 429, url), now), { kind: 'rate-limit', resetsInMinutes: undefined });
         });
 
-        test('resolveContentPath respects custom folder mapping for Hooks', () => {
-            const repoWithMapping = {
-                ...baseRepo,
-                folderMappings: { [CopilotCategory.Hooks]: 'custom/hooks-path' }
-            };
-            const path = resolveContentPath(repoWithMapping, CopilotCategory.Hooks);
-            assert.strictEqual(path, 'custom/hooks-path');
+        test('a reset time already passed counts as one minute', () => {
+            const error = new GitHubApiError('rate limited', 403, url, { remaining: 0, reset: new Date(now - 5000) });
+            assert.deepStrictEqual(classifyAuthFailure(error, now), { kind: 'rate-limit', resetsInMinutes: 1 });
         });
 
-        test('resolveContentPath returns null when Hooks is explicitly excluded', () => {
-            const repoWithExclusion = {
-                ...baseRepo,
-                folderMappings: { [CopilotCategory.Hooks]: null }
-            };
-            const path = resolveContentPath(repoWithExclusion, CopilotCategory.Hooks);
-            assert.strictEqual(path, null);
+        test('401, and 403 with requests remaining, are authentication failures', () => {
+            assert.deepStrictEqual(
+                classifyAuthFailure(new GitHubApiError('Bad credentials', 401, url), now),
+                { kind: 'auth', status: 401, message: 'Bad credentials' }
+            );
+            assert.deepStrictEqual(
+                classifyAuthFailure(new GitHubApiError('Forbidden', 403, url, { remaining: 4999 }), now),
+                { kind: 'auth', status: 403, message: 'Forbidden' }
+            );
         });
 
-        test('resolveContentPath returns empty string when Hooks mapped to root', () => {
-            const repoWithRoot = {
-                ...baseRepo,
-                folderMappings: { [CopilotCategory.Hooks]: 'root' }
-            };
-            const path = resolveContentPath(repoWithRoot, CopilotCategory.Hooks);
-            assert.strictEqual(path, '');
+        test('other failures are not authentication problems', () => {
+            assert.strictEqual(classifyAuthFailure(new GitHubApiError('missing', 404, url), now), undefined);
+            assert.strictEqual(classifyAuthFailure(new Error('offline'), now), undefined);
+        });
+    });
+
+    suite('Download Record Tests', () => {
+        test('moves old records to the engine item ids and clears content hashes', async () => {
+            const tracker = new DownloadTracker(createContext({
+                [DOWNLOADS_KEY]: {
+                    'agents-helper.agent.md-acme-corp-copilot-tools': oldRecord(),
+                    'skills-my-skill-acme-corp-copilot-tools': oldRecord({
+                        itemId: 'skills-my-skill-acme-corp-copilot-tools',
+                        itemName: 'my-skill',
+                        category: 'skills',
+                        sha: 'd'.repeat(40),
+                        size: 0
+                    })
+                }
+            }));
+
+            assert.strictEqual(await tracker.migrateIds(), 2);
+            const downloads = tracker.getDownloads();
+            assert.deepStrictEqual(Object.keys(downloads).sort(), [
+                'acme-corp/copilot-tools/agents/helper.agent.md',
+                'acme-corp/copilot-tools/skills/my-skill'
+            ]);
+            const agent = downloads['acme-corp/copilot-tools/agents/helper.agent.md'];
+            assert.strictEqual(agent.itemId, 'acme-corp/copilot-tools/agents/helper.agent.md');
+            assert.strictEqual(agent.sha, '', 'a content hash is cleared');
+            assert.strictEqual(downloads['acme-corp/copilot-tools/skills/my-skill'].sha, 'd'.repeat(40), 'a GitHub sha is kept');
+            assert.strictEqual(tracker.isDownloaded(agentItem().id), true);
         });
 
-        test('resolveContentPath uses enum value for non-hook categories by default', () => {
-            assert.strictEqual(resolveContentPath(baseRepo, CopilotCategory.Instructions), 'instructions');
-            assert.strictEqual(resolveContentPath(baseRepo, CopilotCategory.Prompts), 'prompts');
-            assert.strictEqual(resolveContentPath(baseRepo, CopilotCategory.Agents), 'agents');
+        test('keeps a newer record already stored under the new id', async () => {
+            const newId = 'acme-corp/copilot-tools/agents/helper.agent.md';
+            const tracker = new DownloadTracker(createContext({
+                [DOWNLOADS_KEY]: {
+                    'agents-helper.agent.md-acme-corp-copilot-tools': oldRecord({ downloadTimestamp: 1000 }),
+                    [newId]: oldRecord({ itemId: newId, downloadTimestamp: 2000, sha: 'e'.repeat(40) })
+                }
+            }));
+
+            assert.strictEqual(await tracker.migrateIds(), 0);
+            const downloads = tracker.getDownloads();
+            assert.deepStrictEqual(Object.keys(downloads), [newId]);
+            assert.strictEqual(downloads[newId].sha, 'e'.repeat(40));
+        });
+
+        test('drops records that cannot be moved', async () => {
+            const tracker = new DownloadTracker(createContext({
+                [DOWNLOADS_KEY]: { 'agents-helper.agent.md--copilot-tools': oldRecord({ repoOwner: '' }) }
+            }));
+            assert.strictEqual(await tracker.migrateIds(), 0);
+            assert.deepStrictEqual(tracker.getDownloads(), {});
+        });
+
+        test('runs once', async () => {
+            const context = createContext({ [DOWNLOADS_KEY]: {} });
+            const tracker = new DownloadTracker(context);
+            await tracker.migrateIds();
+
+            await context.globalState.update(DOWNLOADS_KEY, { 'agents-later.agent.md-acme-corp-copilot-tools': oldRecord() });
+            assert.strictEqual(await tracker.migrateIds(), 0);
+            assert.deepStrictEqual(Object.keys(tracker.getDownloads()), ['agents-later.agent.md-acme-corp-copilot-tools']);
+        });
+
+        test('compares shas when both are known, and sizes otherwise', () => {
+            const item = agentItem();
+            const tracker = (records: Record<string, DownloadMetadata>) => new DownloadTracker(createContext({ [DOWNLOADS_KEY]: records }));
+
+            const withoutSha = tracker({ [item.id]: oldRecord({ itemId: item.id, sha: '', size: 120 }) });
+            assert.strictEqual(withoutSha.hasUpdate(item), false, 'same size');
+            assert.strictEqual(withoutSha.hasUpdate(agentItem({ size: 200 })), true, 'different size');
+
+            const withSha = tracker({ [item.id]: oldRecord({ itemId: item.id, sha: 'b'.repeat(40), size: 999 }) });
+            assert.strictEqual(withSha.hasUpdate(item), false, 'same sha');
+            assert.strictEqual(withSha.hasUpdate(agentItem({ sha: 'c'.repeat(40) })), true, 'different sha');
+        });
+
+        test('records the GitHub sha and the path the engine wrote', async () => {
+            const tracker = new DownloadTracker(createContext());
+            const item = agentItem();
+            await tracker.recordDownload(item, {
+                itemId: item.id,
+                itemName: item.name,
+                category: item.category,
+                repoOwner: 'acme-corp',
+                repoName: 'copilot-tools',
+                downloadTimestamp: 5000,
+                sha: 'f'.repeat(64),
+                size: 120,
+                downloadUrl: item.file.download_url ?? '',
+                localPath: '/workspace/.github/agents/helper.agent.md'
+            });
+
+            const stored = tracker.getDownloadMetadata(item.id);
+            assert.ok(stored);
+            assert.strictEqual(stored.sha, item.file.sha, 'the listing sha, not a content hash');
+            assert.strictEqual(stored.localPath, '/workspace/.github/agents/helper.agent.md');
+            assert.strictEqual(stored.downloadTimestamp, 5000);
+            assert.strictEqual(tracker.hasUpdate(item), false);
         });
     });
 

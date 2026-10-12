@@ -2,12 +2,12 @@
 
 ## Overview
 
-A VS Code extension that provides an explorer view to browse, preview, and download GitHub Copilot customizations (agents, hooks, instructions, plugins, prompts, and skills) from configurable GitHub repositories. Users can filter items by filename, preview content, and selectively download files to their workspace with proper GitHub Copilot folder structure. Repositories with non-standard folder layouts can be configured through custom folder-to-category mappings.
+A VS Code extension that provides an explorer view to browse, preview, and download GitHub Copilot customizations (agents, cookbook, hooks, instructions, plugins, prompts, skills, and workflows) from configurable GitHub repositories. Users can filter items by filename, preview content, and selectively download files to their workspace with proper GitHub Copilot folder structure. Repositories with non-standard folder layouts can be configured through custom folder-to-category mappings.
 
 ## User Journey
 
 1. **Open Explorer View**: User opens the "Git Copilot Tools" view in the VS Code Activity Bar
-2. **Browse Categories**: User sees expandable sections: Plugins, Instructions, Prompts, Agents, Skills, Hooks, Workflows, and Cookbook
+2. **Browse Categories**: User sees expandable sections: Agents, Cookbook, Hooks, Instructions, Plugins, Prompts, Skills, and Workflows
 3. **Search Content**: User types in search bar to filter items across all categories by filename in real-time
 4. **Preview Item**: User clicks on an item to see name and content preview
 5. **Select for Download**: User clicks download button on desired item
@@ -20,16 +20,17 @@ A VS Code extension that provides an explorer view to browse, preview, and downl
    - **Description**: Display a new tree view in VS Code Activity Bar titled "Git Copilot Tools"
    - **Acceptance Criteria**:
      - [x] Tree view appears in Activity Bar with a dedicated view container
-     - [x] View shows categories: Plugins, Instructions, Prompts, Agents, Skills, Hooks, Workflows, and Cookbook
+     - [x] View shows categories in alphabetical order: Agents, Cookbook, Hooks, Instructions, Plugins, Prompts, Skills, and Workflows
      - [x] Each category is expandable/collapsible
      - [x] View persists across VS Code sessions
 
 2. **FR-02**: Repository Data Fetching
    - **Description**: Fetch file listings from configurable GitHub repositories
    - **Acceptance Criteria**:
-     - [x] Extension fetches files from plugins/, instructions/, prompts/, agents/, and skills/ folders
-     - [x] Hooks are fetched from `.github/hooks/` per the GitHub Copilot convention
-     - [x] Data is cached locally for performance
+     - [x] Extension fetches files from the agents/, cookbook/, hooks/, instructions/, plugins/, prompts/, skills/, and workflows/ folders, or the folders a repository maps them to
+     - [x] Hooks are folders, downloaded whole to `.github/hooks/` per the GitHub Copilot convention
+     - [x] Fetching, folder mapping, and downloads use the `cmd-git-copilot-tools` engine
+     - [x] Data is cached locally for the `cacheTimeout` setting
      - [x] Manual refresh button updates cached data
      - [x] Graceful error handling for network failures
      - [x] Support for multiple repository sources
@@ -62,6 +63,10 @@ A VS Code extension that provides an explorer view to browse, preview, and downl
      - [x] Agents save to `.github/agents/`
      - [x] Skills save to `.github/skills/`
      - [x] Hooks save to `.github/hooks/`
+     - [x] Cookbook items save to `.github/cookbook/`
+     - [x] Workflows save to `.github/workflows/`
+     - [x] A repository's `aiFolder` replaces `.github` for its downloads
+     - [x] Plugins download each item their manifest lists, from `plugin.json` at the plugin folder root or `.github/plugin/plugin.json`
      - [x] Creates folders if they don't exist
 
 6. **FR-06**: Download Confirmation
@@ -84,10 +89,11 @@ A VS Code extension that provides an explorer view to browse, preview, and downl
    - **Description**: Configure custom folder-to-category mappings for repositories with non-standard layouts
    - **Acceptance Criteria**:
      - [x] When adding a repo with no standard folders, extension prompts to configure mappings
-     - [x] Webview panel shows one input per category (agents, hooks, instructions, plugins, prompts, skills)
+     - [x] Webview panel shows one input per category (agents, cookbook, hooks, instructions, plugins, prompts, skills, workflows)
      - [x] Support `root` value to treat repo root as a single category source
-     - [x] Support `null` value to exclude a category
+     - [x] Support `null` value to exclude a category and hide it from the tree view
      - [x] Support custom folder paths (e.g., `src/my-prompts`)
+     - [x] Support an array of folders in settings, searched in order, with items shown as `folder/name`
      - [x] When `root` is entered for one category, all other category inputs are disabled
      - [x] Mappings are persisted in VS Code settings alongside repository configuration
      - [x] API queries use resolved content paths based on folder mappings
@@ -98,7 +104,7 @@ A VS Code extension that provides an explorer view to browse, preview, and downl
 - **Performance**: Initial load should complete within 10 seconds on normal internet connection
 - **Reliability**: Graceful degradation when GitHub API is unavailable
 - **Usability**: Interface follows VS Code design patterns and accessibility guidelines
-- **Caching**: Repository data cached for 1 hour, with manual refresh option
+- **Caching**: Repository data cached for the `cacheTimeout` setting (default 1 hour), with manual refresh option
 
 ## Out of Scope
 
@@ -166,3 +172,11 @@ A VS Code extension that provides an explorer view to browse, preview, and downl
 - [x] **Step 9.7**: Integrate folder mapping UI into "Add Repository" flow when no standard folders found (`src/extension.ts`)
 - [x] **Step 9.8**: Add `folderMappings` to `package.json` repository configuration schema
 - [x] **Step 9.9**: Document custom folder mappings in README.md with configuration reference and examples
+
+### Phase 10: Engine Adoption
+- [x] **Step 10.1**: Depend on `cmd-git-copilot-tools` with an exact version pin, bundled by esbuild (`package.json`)
+- [x] **Step 10.2**: Turn `GitHubService` into an adapter over the engine, supplying the token, cache lifetime, and sign-in prompts (`src/githubService.ts`)
+- [x] **Step 10.3**: Normalize repository settings into engine sources, and read the request settings (`src/repoStorage.ts`)
+- [x] **Step 10.4**: Replace the extension's category enum, file types, and `resolveContentPath()` with the engine's `ToolCategory`, `GitHubFileEntry`, and `resolveCategoryPaths()` (`src/types.ts`)
+- [x] **Step 10.5**: Move stored download records to the engine item ids (`src/downloadTracker.ts`)
+- [x] **Step 10.6**: Accept arrays of folders, `aiFolder`, and `branch` in the repository settings schema (`package.json`)

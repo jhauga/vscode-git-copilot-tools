@@ -1,14 +1,7 @@
 import * as vscode from 'vscode';
-import { CopilotCategory, FolderMapping } from './types';
+import { FolderMappings, ORDERED_CATEGORIES, ToolCategory } from './types';
 
-const CATEGORIES: CopilotCategory[] = [
-    CopilotCategory.Agents,
-    CopilotCategory.Instructions,
-    CopilotCategory.Plugins,
-    CopilotCategory.Prompts,
-    CopilotCategory.Skills,
-    CopilotCategory.Workflows
-];
+const CATEGORIES: readonly ToolCategory[] = ORDERED_CATEGORIES;
 
 /**
  * Shows a webview panel that lets the user configure folder-to-category mappings
@@ -17,7 +10,7 @@ const CATEGORIES: CopilotCategory[] = [
 export function showFolderMappingPanel(
     extensionUri: vscode.Uri,
     repoLabel: string
-): Promise<FolderMapping | undefined> {
+): Promise<FolderMappings | undefined> {
     return new Promise((resolve) => {
         const panel = vscode.window.createWebviewPanel(
             'folderMappingConfig',
@@ -36,7 +29,7 @@ export function showFolderMappingPanel(
         panel.webview.onDidReceiveMessage((message) => {
             if (message.type === 'save') {
                 resolved = true;
-                const mapping: FolderMapping = {};
+                const mapping: FolderMappings = {};
                 for (const cat of CATEGORIES) {
                     const value = message.mappings[cat];
                     if (value === 'null' || value === null) {

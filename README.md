@@ -15,7 +15,7 @@ PENDING_APPROVAL
 - **🔍 Browse**: Explore agents, cookbook, hooks, instructions, plugins, prompts, skills, and workflows in a convenient tree view
 - **� Search**: Quickly find files with real-time filtering across all categories
 - **📖 Preview**: View file content before downloading
-- **⬇️ Download**: Save files to appropriate `.github/` folders in your workspace
+- **⬇️ Download**: Save files to the matching `.github/` folders in your workspace, or to another folder chosen per repository
 - **🔃 Refresh**: Update repository data with manual refresh
 - **💾 Caching**: Smart caching for better performance
 
@@ -47,8 +47,10 @@ Downloaded files are organized in your workspace as follows:
 
 These folders will be created automatically if they don't exist.
 
+A repository's `aiFolder` property replaces `.github` for the tools downloaded from it. With `"aiFolder": ".claude"`, a skill from that repository is saved to `.claude/skills/`.
+
 > [!NOTE]
-> Plugins are unique in that each plugin will download a collection of items from the plugin's `<plugin>/.github/plugin/plugin.json` file, and download the corresponding items to the workspace `.github` folder accordingly.
+> Plugins are unique in that downloading a plugin saves every agent, skill, hook, instruction, and prompt its manifest lists to the matching folders above, and saves the plugin's own files, such as its `README.md` and manifest, to `.github/plugins/<plugin>/`. The manifest is `plugin.json` at the root of the plugin folder, or `.github/plugin/plugin.json` in repositories that use the earlier layout. Copilot extensions listed by a plugin are not downloaded.
 
 > [!NOTE]
 > Skills are unique in that each skill is a complete folder containing a `SKILL.md` file and potentially other supporting files. When you download a skill, the entire folder structure is preserved.
@@ -83,10 +85,10 @@ The panel shows one input field per category. For each category you can enter:
 ### Manual Configuration via Settings
 
 Folder mappings can also be set directly in VS Code `settings.json` under the
-`vscode-git-copilot-tools.repositories` array. Each repository object accepts an optional
-`folderMappings` property and an optional `branch` property to pin content fetching to a
-specific branch, tag, or commit SHA. When `branch` is omitted the repository's default branch
-is used. You can also paste a full GitHub tree URL (e.g. `https://github.com/<owner>/<repo>/tree/<branch>`)
+`vscode-git-copilot-tools.repositories` array. Each repository object accepts optional
+`folderMappings`, `branch`, and `aiFolder` properties. `branch` pins content fetching to a
+specific branch, tag, or commit SHA; when it is omitted the repository's default branch is used.
+You can also paste a full GitHub tree URL (e.g. `https://github.com/<owner>/<repo>/tree/<branch>`)
 into **Manage Sources > Add Repository** and the branch will be extracted automatically.
 
 ```json
@@ -111,19 +113,41 @@ into **Manage Sources > Add Repository** and the branch will be extracted automa
 
 | Property | Type | Description |
 |---|---|---|
-| `agents` | `string \| null` | Path to agents folder, `"root"`, or `null` to exclude |
-| `instructions` | `string \| null` | Path to instructions folder, `"root"`, or `null` to exclude |
-| `plugins` | `string \| null` | Path to plugins folder, `"root"`, or `null` to exclude |
-| `prompts` | `string \| null` | Path to prompts folder, `"root"`, or `null` to exclude |
-| `skills` | `string \| null` | Path to skills folder, `"root"`, or `null` to exclude |
+| `agents` | `string \| string[] \| null` | Path to agents folder, `"root"`, an array of folders, or `null` to exclude |
+| `cookbook` | `string \| string[] \| null` | Path to cookbook folder, `"root"`, an array of folders, or `null` to exclude |
+| `hooks` | `string \| string[] \| null` | Path to hooks folder, `"root"`, an array of folders, or `null` to exclude |
+| `instructions` | `string \| string[] \| null` | Path to instructions folder, `"root"`, an array of folders, or `null` to exclude |
+| `plugins` | `string \| string[] \| null` | Path to plugins folder, `"root"`, an array of folders, or `null` to exclude |
+| `prompts` | `string \| string[] \| null` | Path to prompts folder, `"root"`, an array of folders, or `null` to exclude |
+| `skills` | `string \| string[] \| null` | Path to skills folder, `"root"`, an array of folders, or `null` to exclude |
+| `workflows` | `string \| string[] \| null` | Path to workflows folder, `"root"`, an array of folders, or `null` to exclude |
 
-#### Repository `branch` Property
+#### Several Folders for One Category
+
+A category can be read from several folders by mapping it to an array. The folders are
+searched in the order listed, and `"."` or `"/"` in the array is the repository root. Items from
+an array mapping are shown as `folder/name` in the tree view, and the root entry does not list
+the other folders of the same array as tools. An empty array excludes the category, the same
+as `null`.
+
+```json
+{
+  "owner": "acme-corp",
+  "repo": "copilot-skills",
+  "folderMappings": {
+    "skills": ["frontend", "backend", "."]
+  }
+}
+```
+
+#### Repository Properties
 
 | Property | Type | Description |
 |---|---|---|
 | `branch` | `string` | Branch, tag, or commit SHA to read content from. When omitted the repository's default branch is used. |
+| `aiFolder` | `string` | Folder that tools from this repository are saved under, relative to the workspace. When omitted, `.github` is used. Absolute paths are ignored. |
 
-All properties are optional. Omitted properties use the default category path.
+All properties are optional. Omitted mappings use the default category path.
 
 ### Examples
 
@@ -174,19 +198,29 @@ All properties are optional. Omitted properties use the default category path.
 }
 ```
 
+**Repository whose tools are saved under `.claude`:**
+
+```json
+{
+  "owner": "acme-corp",
+  "repo": "copilot-tools",
+  "aiFolder": ".claude"
+}
+```
+
 ## Configuration Reference
 
 All settings are under the `vscode-git-copilot-tools` namespace and scoped to the application level.
 
 | Setting | Type | Default | Description |
 |---|---|---|---|
-| `repositories` | `array` | See [docs/configuration.md](docs/configuration.md) | GitHub repositories used as content sources. Each entry supports `owner`, `repo`, `label`, `baseUrl`, `branch`, and `folderMappings`. |
-| `enterpriseToken` | `string` | `""` | Personal Access Token for GitHub Enterprise authentication. |
-| `cacheTimeout` | `number` | `3600000` | Cache duration in milliseconds (1 hour). Min 60000, max 86400000. |
+| `repositories` | `array` | See [docs/configuration.md](docs/configuration.md) | GitHub repositories used as content sources. Each entry supports `owner`, `repo`, `label`, `baseUrl`, `branch`, `aiFolder`, and `folderMappings`. |
+| `enterpriseToken` | `string` | `""` | Personal Access Token for GitHub Enterprise sources. Sent only to sources with a `baseUrl`. |
+| `cacheTimeout` | `number` | `3600000` | How long repository listings are cached, in milliseconds (1 hour). Min 60000, max 86400000. |
 | `autoRefresh` | `boolean` | `false` | Automatically refresh content on VS Code startup. |
 | `showTreeView` | `boolean` | `true` | Show/hide the tree view in the Explorer panel. |
-| `allowInsecureEnterpriseCerts` | `boolean` | `false` | Allow insecure TLS certificates for Enterprise GitHub servers. |
-| `enableGithubAuth` | `boolean` | `true` | Enable GitHub OAuth to increase API rate limits (60 to 5,000 req/hr). |
+| `allowInsecureEnterpriseCerts` | `boolean` | `false` | Skip TLS certificate validation for GitHub Enterprise servers. Requests to github.com always validate certificates. |
+| `enableGithubAuth` | `boolean` | `true` | Use VS Code's GitHub sign-in for github.com sources to increase API rate limits (60 to 5,000 req/hr). |
 | `logLevel` | `string` | `"info"` | Log level: `error`, `warn`, `info`, `debug`, or `trace`. |
 | `checkForUpdates` | `boolean` | `true` | Check for updates to downloaded items and show notifications. |
 
@@ -210,8 +244,36 @@ This extension was built with:
 
 - TypeScript
 - VS Code Extension API
-- Axios for HTTP requests
+- The [`cmd-git-copilot-tools`](https://www.npmjs.com/package/cmd-git-copilot-tools) engine for GitHub requests, folder mapping, and downloads
 - ESBuild for bundling
+
+### Engine
+
+Fetching, folder mapping, downloads, and plugin handling come from
+[`cmd-git-copilot-tools`](https://www.npmjs.com/package/cmd-git-copilot-tools), the engine behind
+the command-line tool of the same name. This extension keeps its own views, settings, sign-in,
+and prompts, and passes the sources, settings, and GitHub token to the engine on every call:
+
+```typescript
+import { downloadItem, fetchCategory } from 'cmd-git-copilot-tools';
+
+const source = { owner: 'acme-corp', repo: 'copilot-tools', aiFolder: '.claude' };
+const skills = await fetchCategory(source, 'skills', token, cacheTimeout);
+await downloadItem(skills[0], workspaceFolder, token, { targetName: 'my-skill' });
+```
+
+Engine changes are made in the engine repository and published to npm. `package.json` pins an
+exact engine version, and each engine release reaches this extension as a dependency update.
+
+To try an engine change before it is published, pack the engine and install the package without
+changing the pin:
+
+```bash
+cd ../cmd-git-copilot-tools
+npm pack
+cd ../vscode-git-copilot-tools
+npm install --no-save ../cmd-git-copilot-tools/cmd-git-copilot-tools-<version>.tgz
+```
 
 ### Building
 
@@ -225,6 +287,8 @@ npm run compile
 ```bash
 npm run test
 ```
+
+Tests run in a VS Code test host. The engine's own test suites run in the engine repository.
 
 ## UI Placement / Custom View Container
 

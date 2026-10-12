@@ -15,7 +15,7 @@
   "qna": "https://github.com/jhauga/vscode-git-copilot-tools/issues",
   "homepage": "https://github.com/jhauga/vscode-git-copilot-tools",
   "description": "Browse and download agents, cookbook, hooks, instructions, plugins, prompts, and skills from GitHub repositories with Copilot custom tools. Clone of `timheuer/vscode-awesome-copilot` with additional features and slight variations.",
-  "version": "0.2.0-dev",
+  "version": "0.3.0-dev",
   "icon": "icon.png",
   "engines": {
     "vscode": "^1.103.0"
@@ -67,65 +67,107 @@
                 "type": "string",
                 "description": "GitHub Enterprise URL (optional)"
               },
+              "branch": {
+                "type": "string",
+                "description": "Branch, tag, or commit SHA to read content from (optional). When omitted, the repository's default branch is used."
+              },
+              "aiFolder": {
+                "type": "string",
+                "description": "Folder that tools from this repository download into, relative to the workspace (optional, default: .github). For example, .claude saves skills to .claude/skills.",
+                "pattern": "^(?![/\\\\]|[a-zA-Z]:|~(?:[/\\\\]|$))",
+                "patternErrorMessage": "Use a folder relative to the workspace, such as .claude"
+              },
               "folderMappings": {
                 "type": "object",
-                "description": "Custom folder-to-category mappings (optional). Map category names to custom folder paths, 'root' (entire repo), or null (excluded).",
+                "description": "Custom folder-to-category mappings (optional). Map a category to a folder path, 'root' (the entire repository root), an array of folders searched in order ('.' is the repository root), or null (excluded).",
                 "properties": {
                   "agents": {
                     "type": [
                       "string",
+                      "array",
                       "null"
                     ],
-                    "description": "Path to agents folder, 'root', or null to exclude"
-                  },
-                  "instructions": {
-                    "type": [
-                      "string",
-                      "null"
-                    ],
-                    "description": "Path to instructions folder, 'root', or null to exclude"
-                  },
-                  "plugins": {
-                    "type": [
-                      "string",
-                      "null"
-                    ],
-                    "description": "Path to plugins folder, 'root', or null to exclude"
-                  },
-                  "prompts": {
-                    "type": [
-                      "string",
-                      "null"
-                    ],
-                    "description": "Path to prompts folder, 'root', or null to exclude"
-                  },
-                  "skills": {
-                    "type": [
-                      "string",
-                      "null"
-                    ],
-                    "description": "Path to skills folder, 'root', or null to exclude"
-                  },
-                  "workflows": {
-                    "type": [
-                      "string",
-                      "null"
-                    ],
-                    "description": "Path to workflows folder, 'root', or null to exclude"
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Path to agents folder, 'root', an array of folders, or null to exclude"
                   },
                   "cookbook": {
                     "type": [
                       "string",
+                      "array",
                       "null"
                     ],
-                    "description": "Path to cookbook folder, 'root', or null to exclude"
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Path to cookbook folder, 'root', an array of folders, or null to exclude"
                   },
                   "hooks": {
                     "type": [
                       "string",
+                      "array",
                       "null"
                     ],
-                    "description": "Path to hooks folder, 'root', or null to exclude"
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Path to hooks folder, 'root', an array of folders, or null to exclude"
+                  },
+                  "instructions": {
+                    "type": [
+                      "string",
+                      "array",
+                      "null"
+                    ],
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Path to instructions folder, 'root', an array of folders, or null to exclude"
+                  },
+                  "plugins": {
+                    "type": [
+                      "string",
+                      "array",
+                      "null"
+                    ],
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Path to plugins folder, 'root', an array of folders, or null to exclude"
+                  },
+                  "prompts": {
+                    "type": [
+                      "string",
+                      "array",
+                      "null"
+                    ],
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Path to prompts folder, 'root', an array of folders, or null to exclude"
+                  },
+                  "skills": {
+                    "type": [
+                      "string",
+                      "array",
+                      "null"
+                    ],
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Path to skills folder, 'root', an array of folders, or null to exclude"
+                  },
+                  "workflows": {
+                    "type": [
+                      "string",
+                      "array",
+                      "null"
+                    ],
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Path to workflows folder, 'root', an array of folders, or null to exclude"
                   }
                 }
               }
@@ -410,7 +452,7 @@
   },
   "dependencies": {
     "@timheuer/vscode-ext-logger": "^0.1.35",
-    "axios": "^1.11.0"
+    "cmd-git-copilot-tools": "2.1.0"
   },
   "optionalDependencies": {
     "@esbuild/linux-x64": "^0.27.3"

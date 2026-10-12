@@ -1,155 +1,38 @@
 /**
- * Types and interfaces for the Git Copilot Tools Browser extension
+ * Types and constants for the Git Copilot Tools extension.
+ *
+ * Shared types and constants come from the cmd-git-copilot-tools engine; the
+ * values defined here belong to the extension's own views.
  */
 
+import type { ToolCategory } from 'cmd-git-copilot-tools';
 
-// Represents a file in a GitHub repo
-export interface GitHubFile {
-    name: string;
-    path: string;
-    download_url: string;
-    size: number;
-    type: 'file' | 'dir';
-    sha?: string; // Git SHA hash from GitHub API
-    repo?: RepoSource; // Optional: which repo this file comes from
-    displayName?: string; // For handling duplicate filenames across repos
-}
+export type {
+    CopilotItem,
+    DownloadMetadata as EngineDownloadMetadata,
+    FolderMappings,
+    GitHubFileContent,
+    GitHubFileEntry,
+    PluginDownloadResult,
+    PluginParseResult,
+    RepositorySource,
+    ToolCategory,
+} from 'cmd-git-copilot-tools';
 
+export {
+    CATEGORY_DISPLAY,
+    GitHubApiError,
+    ORDERED_CATEGORIES,
+} from 'cmd-git-copilot-tools';
 
-// Per-repository folder mapping: maps each category to a custom folder path, 'root', or null (excluded)
-export type FolderMapping = Partial<Record<CopilotCategory, string | null>>;
-
-// Represents a GitHub repo source
-export interface RepoSource {
-    owner: string;
-    repo: string;
-    label?: string;
-    baseUrl?: string; // For GitHub Enterprise: https://github.wdf.sap.corp
-    branch?: string; // Optional branch/tag/ref to track (e.g. "main", "dev", "v2"); when omitted the repo default branch is used
-    folderMappings?: FolderMapping; // Custom folder-to-category mapping for this repo
-}
-
-export interface CopilotItem {
-    id: string;
-    name: string;
-    category: CopilotCategory;
-    file: GitHubFile;
-    content?: string;
-    repo: RepoSource;
-}
-
-export enum CopilotCategory {
-    Plugins = 'plugins',
-    Instructions = 'instructions',
-    Prompts = 'prompts',
-    Agents = 'agents',
-    Skills = 'skills',
-    Workflows = 'workflows',
-    Cookbook = 'cookbook',
-    Hooks = 'hooks'
-}
-
-
-// Cache per repo+category
-export interface CacheEntry {
-    data: GitHubFile[];
-    timestamp: number;
-    category: CopilotCategory;
-    repo: RepoSource;
-}
-
-export const CATEGORY_LABELS: Record<CopilotCategory, string> = {
-    [CopilotCategory.Plugins]: 'Plugins',
-    [CopilotCategory.Instructions]: 'Instructions',
-    [CopilotCategory.Prompts]: 'Prompts',
-    [CopilotCategory.Agents]: 'Agents',
-    [CopilotCategory.Skills]: 'Skills',
-    [CopilotCategory.Workflows]: 'Workflows',
-    [CopilotCategory.Cookbook]: 'Cookbook',
-    [CopilotCategory.Hooks]: 'Hooks'
+/** Codicon shown for the items of each tool type in the tree view. */
+export const CATEGORY_ICONS: Record<ToolCategory, string> = {
+    agents: 'robot',
+    cookbook: 'notebook',
+    hooks: 'zap',
+    instructions: 'book',
+    plugins: 'package',
+    prompts: 'lightbulb',
+    skills: 'folder',
+    workflows: 'file',
 };
-
-export const FOLDER_PATHS: Record<CopilotCategory, string> = {
-    [CopilotCategory.Plugins]: '.github/plugins',
-    [CopilotCategory.Instructions]: '.github/instructions',
-    [CopilotCategory.Prompts]: '.github/prompts',
-    [CopilotCategory.Agents]: '.github/agents',
-    [CopilotCategory.Skills]: '.github/skills',
-    [CopilotCategory.Workflows]: '.github/workflows',
-    [CopilotCategory.Cookbook]: '.github/cookbook',
-    [CopilotCategory.Hooks]: '.github/hooks'
-};
-
-// Path to plugin.json within a plugin directory
-export const PLUGIN_JSON_RELATIVE_PATH = '.github/plugin/plugin.json';
-
-// Map plugin item "kind" values to CopilotCategory for local save paths
-export const KIND_TO_CATEGORY: Record<string, CopilotCategory> = {
-    'instruction': CopilotCategory.Instructions,
-    'prompt': CopilotCategory.Prompts,
-    'agent': CopilotCategory.Agents,
-    'skill': CopilotCategory.Skills,
-};
-
-// Plugin metadata structure from plugin.json files.
-// Supports two formats:
-//   Legacy format: items array with {path, kind} objects
-//   Current format: separate agents/skills/instructions/prompts arrays with relative paths
-export interface PluginMetadata {
-    id?: string;
-    name: string;
-    description: string;
-    version?: string;
-    author?: { name: string };
-    repository?: string;
-    license?: string;
-    featured?: boolean;
-    tags?: string[];
-    keywords?: string[];
-    // Current format: separate arrays per category (paths relative to plugin dir, e.g. "./agents", "./skills/name")
-    agents?: string[];
-    skills?: string[];
-    instructions?: string[];
-    prompts?: string[];
-    // Legacy format: flat items array (normalized from current format during parsePluginJson)
-    items?: PluginItem[];
-    display?: {
-        ordering?: 'alpha' | 'custom' | 'manual';
-        show_badge?: boolean;
-    };
-}
-
-export interface PluginItem {
-    path: string;
-    kind: 'instruction' | 'prompt' | 'agent' | 'skill';
-}
-
-export interface PluginParseResult {
-    metadata: PluginMetadata;
-    rawContent: string;
-}
-
-/**
- * Resolve the API content path for a given category and repo source.
- * Returns the folder path to query, or null if the category is excluded.
- * When the mapping is 'root', returns an empty string (repo root).
- */
-export function resolveContentPath(repo: RepoSource, category: CopilotCategory): string | null {
-    if (repo.folderMappings) {
-        const mapping = repo.folderMappings[category];
-        if (mapping === null) {
-            // Explicitly excluded
-            return null;
-        }
-        if (mapping === 'root') {
-            // Entire repo root is this category's source
-            return '';
-        }
-        if (typeof mapping === 'string' && mapping.trim() !== '') {
-            // Custom folder path
-            return mapping.trim();
-        }
-    }
-    // Default: use the standard category name as path
-    return category;
-}

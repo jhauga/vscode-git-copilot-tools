@@ -1,0 +1,87 @@
+name: Build and Publish
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - "**/*.md"
+      - "**/*.gitignore"
+      - "**/*.gitattributes"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: 📦 Install dependencies
+        run: npm install
+
+      - name: 🧪 Test
+        run: xvfb-run -a npm test
+
+  publish:
+    # Pushes and pull requests only run the tests; publishing is started by hand from main
+    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' }}
+    needs: test
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: 📦 Install dependencies
+        run: npm install
+
+      - name: 🎁 Install vsce
+        run: npm install -g @vscode/vsce
+
+      - name: 🏷️ NBGV
+        uses: dotnet/nbgv@v0.5.2
+        id: nbgv
+        with:
+          stamp: package.json
+
+      - name: 🗣️ NBGV outputs
+        run: |
+          echo "SimpleVersion: ${{ steps.nbgv.outputs.SimpleVersion }}"
+
+      - name: 📦 Package
+        run: |
+          vsce package --no-dependencies -o ./${{ github.event.repository.name }}.vsix
+
+      - name: 📰 Publish
+        run: vsce publish --packagePath ./${{ github.event.repository.name }}.vsix
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+
+      - name: ⬆️ Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ github.event.repository.name }}.vsix
+          path: ./*.vsix
+
+      - name: 🏷️ Tag and Release
+        id: tag_release
+        uses: softprops/action-gh-release@v3
+        with:
+          body: Release ${{ steps.nbgv.outputs.SimpleVersion }}
+          tag_name: ${{ steps.nbgv.outputs.SimpleVersion }}
+          generate_release_notes: true
+          files: ./*.vsix

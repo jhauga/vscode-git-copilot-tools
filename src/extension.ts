@@ -1,90 +1,92 @@
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
+import * as path from 'path';
+import * as fs from 'fs';
+import { getSkippedPluginEntries, resolveAiFolder, resolveCategoryDir } from 'cmd-git-copilot-tools';
 import { VscodeGitCopilotToolsProvider, VscodeGitCopilotToolsTreeItem } from './treeProvider';
 import { GitHubService } from './githubService';
 import { CopilotPreviewProvider } from './previewProvider';
-import { CopilotItem, FOLDER_PATHS, CopilotCategory, KIND_TO_CATEGORY, FolderMapping, RepoSource } from './types';
-import * as path from 'path';
-import * as fs from 'fs';
-import { RepoStorage } from './repoStorage';
+import { CopilotItem, GitHubApiError, ORDERED_CATEGORIES, PluginParseResult, RepositorySource, ToolCategory } from './types';
+import { RepoStorage, parseRepositoryInput } from './repoStorage';
 import { StatusBarManager } from './statusBarManager';
 import { DownloadTracker } from './downloadTracker';
 import { SearchViewProvider } from './searchPanel';
 import { showFolderMappingPanel } from './folderMappingPanel';
-import axios from 'axios';
-import * as https from 'https';
-import { createLogger, createLoggerWithConfigMonitoring, Logger } from '@timheuer/vscode-ext-logger';
 import { initializeLogger, getLogger } from './logger';
 import { generateNoteContent } from './views/note.vscode-git-copilot-tools';
 
-// Global logger instance
-let logger: Logger;
+/** File written into each downloaded plugin folder, listing its slash commands. */
+const NOTE_FILE_NAME = 'NOTE.VSCODE-VSCODE-GIT-COPILOT-TOOLS-EXTENSION.md';
 
-// Create HTTPS agent with secure SSL handling - requires explicit user opt-in for insecure certificates
-function createHttpsAgent(url: string, allowInsecureEnterpriseCerts: boolean = false): https.Agent | undefined {
-    logger.debug('[createHttpsAgent] Called with:', { url, allowInsecureEnterpriseCerts });
+/** How download prompts name the tool types that are folders. */
+const FOLDER_LABELS: Partial<Record<ToolCategory, string>> = {
+    hooks: 'hook folder',
+    skills: 'skill folder',
+};
 
-    try {
-        // If it's not github.com, treat as enterprise
-        const isEnterprise = !url.includes('github.com');
-        logger.debug('[createHttpsAgent] isEnterprise:', isEnterprise);
-
-        if (isEnterprise && allowInsecureEnterpriseCerts) {
-            logger.debug('[createHttpsAgent] Creating INSECURE agent for enterprise');
-            // Only allow insecure certificates when explicitly enabled by user
-            logger.warn('⚠️ SECURITY WARNING: Using insecure HTTPS agent for enterprise GitHub server (user-configured)');
-            const agent = new https.Agent({
-                rejectUnauthorized: false,
-                // Allow self-signed certificates
-                checkServerIdentity: () => undefined,
-                // Keep connections alive
-                keepAlive: true,
-                maxSockets: 5
-            });
-            logger.debug('[createHttpsAgent] Insecure agent created successfully:', !!agent);
-            return agent;
-        } else if (isEnterprise) {
-            logger.debug('[createHttpsAgent] Creating SECURE agent for enterprise');
-            // For enterprise GitHub with secure certificates
-            return new https.Agent({
-                // Full certificate validation enabled
-                rejectUnauthorized: true,
-                // Keep connections alive
-                keepAlive: true,
-                maxSockets: 5
-            });
-        } else {
-            logger.debug('[createHttpsAgent] Public GitHub detected, returning undefined (default agent)');
-        }
-    } catch (error) {
-        logger.warn('[createHttpsAgent] Failed to create HTTPS agent, using default:', error);
-    }
-
-    logger.debug('[createHttpsAgent] Returning undefined (default secure agent)');
-    return undefined;
+function errorText(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
 }
+
+function capitalize(text: string): string {
+    return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+/** Validate a file or folder name typed into a download prompt. */
+function validateDownloadName(value: string, emptyMessage: string): string | null {
+    const name = value.trim();
+    if (name === '') {
+        return emptyMessage;
+    }
+    if (name === '.' || name === '..' || /[\\/]/.test(name)) {
+        return 'Use a single name, without / or \\';
+    }
+    return null;
+}
+
+/** Category folder an item downloads into, honoring its source's aiFolder. */
+function categoryDirFor(workspacePath: string, item: CopilotItem): string {
+    return resolveCategoryDir(workspacePath, item.category, resolveAiFolder({ source: item.repo }));
+}
+
+/** A folder relative to the workspace, written with forward slashes. */
+function toDisplayPath(workspacePath: string, folder: string): string {
+    return path.relative(workspacePath, folder).split(path.sep).join('/');
+}
+
+function countFiles(dir: string): number {
+    let count = 0;
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        count += entry.isDirectory() ? countFiles(path.join(dir, entry.name)) : 1;
+    }
+    return count;
+}
+
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
 export async function activate(context: vscode.ExtensionContext) {
 
     // Initialize logger with configuration monitoring
     initializeLogger(context);
-    logger = getLogger();
+    const logger = getLogger();
 
-    // 🔒 Secure TLS handling - SSL verification enabled by default
-    // Enterprise GitHub with self-signed certificates requires explicit user opt-in
-    logger.info('Extension initialized with secure TLS handling (SSL verification enabled)');
+    // Initialize services
+    const statusBarManager = new StatusBarManager();
+    const githubService = new GitHubService(statusBarManager);
+    const downloadTracker = new DownloadTracker(context);
+    const treeProvider = new VscodeGitCopilotToolsProvider(githubService, context, downloadTracker);
+    const previewProvider = new CopilotPreviewProvider();
 
-    // Debug: Test configuration reading on startup
-    const config = vscode.workspace.getConfiguration('vscode-git-copilot-tools');
-    const allowInsecureEnterpriseCerts = config.get<boolean>('allowInsecureEnterpriseCerts', false);
-    logger.debug('allowInsecureEnterpriseCerts setting:', allowInsecureEnterpriseCerts);
-    logger.trace('Configuration inspection:', config.inspect('allowInsecureEnterpriseCerts'));
+    // Certificate validation stays on unless allowInsecureEnterpriseCerts is set,
+    // and then only for GitHub Enterprise servers
+    githubService.applyRequestSettings();
+    logger.info('Extension initialized');
+
+    // Download records saved by earlier versions use the old item ids
+    await downloadTracker.migrateIds();
 
     // Register manage sources command (UI entry point)
-    // Static imports for ESM/TS compatibility
-
     const manageSourcesDisposable = vscode.commands.registerCommand('vscode-git-copilot-tools.manageSources', async () => {
         // Main quick pick menu
         let sources = RepoStorage.getSources(context);
@@ -93,7 +95,7 @@ export async function activate(context: vscode.ExtensionContext) {
                 { label: 'Add Repository', description: 'Add a new public GitHub repo as a source' },
                 { label: 'Remove Repository', description: 'Remove a repo from sources' },
                 { label: 'Reset to Default', description: 'Restore default source list' },
-                { label: 'View Sources', description: sources.map((s: any) => `${s.owner}/${s.repo}`).join(', ') },
+                { label: 'View Sources', description: sources.map(s => `${s.owner}/${s.repo}`).join(', ') },
                 { label: 'Done', description: 'Exit' }
             ], { placeHolder: 'Manage Copilot Sources' });
             if (!pick || pick.label === 'Done') { break; }
@@ -106,393 +108,22 @@ export async function activate(context: vscode.ExtensionContext) {
                     }
                 });
                 if (!input) { continue; }
-                // Parse input - support GitHub Enterprise URLs
-                let owner = '', repo = '', baseUrl = '', branch = '';
 
-                // Clean the input first
-                const cleanInput = input.trim();
-                logger.debug('Parsing input:', `"${cleanInput}"`);
-
-                try {
-                    if (cleanInput.startsWith('http')) {
-                        // Enhanced URL parsing for enterprise GitHub
-                        // Also captures optional /tree/<branch> segment
-                        const urlMatch = cleanInput.match(/^https?:\/\/([^\/]+)\/([^\/]+)\/([^\/]+?)(?:\.git)?(?:\/tree\/([^\/][^?#]*))?(?:[?#].*)?$/);
-                        logger.debug('URL match result:', urlMatch);
-
-                        if (urlMatch) {
-                            const domain = urlMatch[1];
-                            owner = urlMatch[2];
-                            repo = urlMatch[3];
-                            branch = urlMatch[4] ? urlMatch[4].trim() : '';
-
-                            logger.debug('Parsed URL - domain:', domain, 'owner:', owner, 'repo:', repo, 'branch:', branch);
-
-                            // If not github.com, it's GitHub Enterprise
-                            if (domain !== 'github.com') {
-                                baseUrl = `https://${domain}`;
-                            }
-                        } else {
-                            throw new Error('Invalid URL format');
-                        }
-                    } else if (cleanInput.includes('/')) {
-                        const parts = cleanInput.split('/').filter(p => p.trim());
-                        logger.debug('Split parts:', parts);
-
-                        if (parts.length >= 2) {
-                            owner = parts[0].trim();
-                            repo = parts[1].trim().replace(/\.git$/, ''); // Remove .git suffix if present
-
-                            logger.debug('Parsed parts - owner:', owner, 'repo:', repo);
-                        }
-                    }
-                } catch (parseError) {
-                    logger.error('URL parsing error:', parseError);
-                }
-
-                logger.debug('Final parsed values - owner:', owner, 'repo:', repo, 'baseUrl:', baseUrl, 'branch:', branch);
-
-                if (!owner || !repo) {
-                    vscode.window.showErrorMessage(`Invalid repository format. Use owner/repo or full URL. Parsed: owner="${owner}", repo="${repo}"`);
+                // Parse input - supports owner/repo and GitHub or GitHub Enterprise URLs
+                const source = parseRepositoryInput(input);
+                logger.debug('Parsed repository input:', { input: input.trim(), source });
+                if (!source) {
+                    vscode.window.showErrorMessage(`Invalid repository format: "${input.trim()}". Use owner/repo or a full repository URL.`);
                     continue;
                 }
-                // Check for duplicate
-                if (sources.some((s: any) => s.owner === owner && s.repo === repo)) {
-                    vscode.window.showWarningMessage('Repository already added.');
-                    continue;
-                }
-                // For enterprise GitHub, show info message
-                if (baseUrl) {
-                    const enterpriseUrl = `${baseUrl}/${owner}/${repo}`;
-                    vscode.window.showInformationMessage(
-                        `🔐 Enterprise GitHub Detected: ${enterpriseUrl}\n\nPlease ensure you have configured your Personal Access Token using "Configure Enterprise Token" command.`
-                    );
-                }
-
-                // Validate repo structure (check that at least one content folder exists)
-                try {
-                    const cats = ['plugins', 'instructions', 'prompts', 'agents', 'skills'];
-                    const foundFolders: string[] = [];
-                    const missingFolders: string[] = [];
-
-                    // Show progress for enterprise repos
-                    if (baseUrl) {
-                        statusBarManager.showLoading(`Validating repository structure for ${owner}/${repo}...`);
-                    }
-
-                    // Helper function to check if a folder exists
-                    const checkFolder = async (cat: string): Promise<boolean> => {
-                        // Build correct API URL for GitHub or GitHub Enterprise
-                        // Append ?ref=<branch> when a specific branch was requested
-                        const refSuffix = branch ? `?ref=${encodeURIComponent(branch)}` : '';
-                        let apiUrl: string;
-                        if (baseUrl) {
-                            apiUrl = `${baseUrl}/api/v3/repos/${owner}/${repo}/contents/${cat}${refSuffix}`;
-                        } else {
-                            apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${cat}${refSuffix}`;
-                        }
-
-                        const headers: Record<string, string> = {
-                            'User-Agent': 'VSCode-VscodeGitCopilotTools-Extension',
-                            'Accept': 'application/vnd.github.v3+json'
-                        };
-
-                        if (baseUrl) {
-                            // Enhanced enterprise GitHub auth headers
-                            headers['X-Requested-With'] = 'VSCode-Extension';
-                            headers['Accept-Encoding'] = 'gzip, deflate, br';
-                            headers['Accept-Language'] = 'en-US,en;q=0.9';
-                            headers['Cache-Control'] = 'no-cache';
-                            headers['Pragma'] = 'no-cache';
-                            headers['Sec-Fetch-Dest'] = 'empty';
-                            headers['Sec-Fetch-Mode'] = 'cors';
-                            headers['Sec-Fetch-Site'] = 'same-origin';
-
-                            // Priority 1: Check for configured enterprise token
-                            const config = vscode.workspace.getConfiguration('vscode-git-copilot-tools');
-                            const enterpriseToken = config.get<string>('enterpriseToken');
-
-                            if (enterpriseToken) {
-                                headers['Authorization'] = `token ${enterpriseToken}`;
-                                logger.debug('🔑 Using configured enterprise GitHub token');
-                            } else {
-                                // Priority 2: Try VS Code's authentication provider
-                                try {
-                                    const session = await vscode.authentication.getSession('github', [], {
-                                        createIfNone: false,
-                                        silent: true
-                                    });
-                                    if (session && session.accessToken) {
-                                        headers['Authorization'] = `token ${session.accessToken}`;
-                                        logger.debug('🔑 Using VS Code GitHub authentication');
-                                    } else {
-                                        logger.info('📝 No authentication available - please configure enterprise token');
-                                    }
-                                } catch (authError) {
-                                    logger.info('📝 VS Code GitHub auth not available - please configure enterprise token');
-                                }
-                            }
-                        }
-
-                        // Enhanced SSL handling with security configuration
-                        const config = vscode.workspace.getConfiguration('vscode-git-copilot-tools');
-                        const allowInsecureEnterpriseCerts = config.get<boolean>('allowInsecureEnterpriseCerts', false);
-
-                        // Debug logging for SSL handling
-                        if (baseUrl) {
-                            logger.debug('Enterprise GitHub detected:', baseUrl);
-                            logger.debug('API URL:', apiUrl);
-                            logger.debug('Configuration check - allowInsecureEnterpriseCerts:', allowInsecureEnterpriseCerts);
-                            logger.trace('Configuration raw value:', config.get('allowInsecureEnterpriseCerts'));
-                            logger.trace('Full config inspection:', config.inspect('allowInsecureEnterpriseCerts'));
-                        }
-
-                        const httpsAgent = createHttpsAgent(apiUrl, allowInsecureEnterpriseCerts);
-
-                        // More debug logging for SSL handling
-                        if (baseUrl) {
-                            logger.debug('HTTPS Agent created:', !!httpsAgent);
-                            logger.debug('🔧 createHttpsAgent parameters:', {
-                                url: apiUrl,
-                                allowInsecureEnterpriseCerts: allowInsecureEnterpriseCerts,
-                                isEnterprise: !apiUrl.includes('github.com')
-                            });
-                            if (httpsAgent) {
-                                logger.debug('HTTPS Agent options:', {
-                                    rejectUnauthorized: (httpsAgent as any).options?.rejectUnauthorized,
-                                    checkServerIdentity: !!(httpsAgent as any).options?.checkServerIdentity
-                                });
-                            } else {
-                                logger.warn('❌ HTTPS Agent is undefined - checking createHttpsAgent logic');
-                            }
-                        }
-
-                        const axiosConfig: any = {
-                            headers: headers,
-                            timeout: 10000, // Increased timeout for enterprise
-                            // For enterprise GitHub, allow cookies for authentication
-                            withCredentials: !!baseUrl
-                        };
-
-                        // Apply SSL configuration for enterprise GitHub
-                        if (baseUrl) {
-                            if (httpsAgent) {
-                                axiosConfig.httpsAgent = httpsAgent;
-                                // Ensure axios uses the custom agent
-                                axiosConfig.agent = httpsAgent;
-                                logger.debug('✅ HTTPS Agent applied to axios config');
-                            } else {
-                                logger.debug('❌ No HTTPS Agent created - will use default (secure) TLS');
-                            }
-                        }
-
-
-                        try {
-                            let resp;
-                            if (baseUrl && allowInsecureEnterpriseCerts) {
-                                // Temporary global TLS override for this specific enterprise request
-                                logger.trace('🔧 [WORKAROUND] Applying global TLS override for enterprise GitHub request');
-                                const originalRejectUnauthorized = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
-                                process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
-
-                                try {
-                                    resp = await axios.get(apiUrl, axiosConfig);
-                                    logger.trace('🔧 [WORKAROUND] Enterprise request succeeded with global TLS override');
-                                } finally {
-                                    // Restore original setting immediately
-                                    if (originalRejectUnauthorized === undefined) {
-                                        delete process.env.NODE_TLS_REJECT_UNAUTHORIZED;
-                                    } else {
-                                        process.env.NODE_TLS_REJECT_UNAUTHORIZED = originalRejectUnauthorized;
-                                    }
-                                    logger.trace('🔧 [WORKAROUND] TLS validation restored');
-                                }
-                            } else {
-                                resp = await axios.get(apiUrl, axiosConfig);
-                            }
-
-                            // Check if response contains valid directory content
-                            return Array.isArray(resp.data) && resp.data.length > 0;
-                        } catch (error: any) {
-                            // If 404, folder doesn't exist - that's okay for our flexible validation
-                            if (error.response?.status === 404) {
-                                return false;
-                            }
-                            // Re-throw other errors (auth, network, etc.)
-                            throw error;
-                        }
-                    };
-
-                    // Check each folder and track which ones exist
-                    for (const cat of cats) {
-                        const exists = await checkFolder(cat);
-                        if (exists) {
-                            foundFolders.push(cat);
-                        } else {
-                            missingFolders.push(cat);
-                        }
-                    }
-
-                    // Repository is valid if it has at least one content folder
-                    if (foundFolders.length === 0) {
-                        // No default folders found - offer folder mapping configuration UI
-                        const configChoice = await vscode.window.showInformationMessage(
-                            `No standard content folders found in ${owner}/${repo}. Would you like to configure custom folder mappings?`,
-                            'Configure Folders',
-                            'Cancel'
-                        );
-
-                        if (configChoice !== 'Configure Folders') {
-                            continue;
-                        }
-
-                        const repoLabel = baseUrl ? `${baseUrl}/${owner}/${repo}` : `${owner}/${repo}`;
-                        const folderMappings = await showFolderMappingPanel(context.extensionUri, repoLabel);
-
-                        if (!folderMappings) {
-                            // User cancelled the folder mapping panel
-                            continue;
-                        }
-
-                        // Check that at least one mapping is set
-                        const hasMapping = Object.values(folderMappings).some(v => v !== null && v !== undefined && v !== '');
-                        if (!hasMapping) {
-                            vscode.window.showWarningMessage('No folder mappings configured. Repository not added.');
-                            continue;
-                        }
-
-                        // Create repo source with custom folder mappings
-                        const repoSource: RepoSource = baseUrl
-                            ? { owner, repo, baseUrl, ...(branch && { branch }), folderMappings }
-                            : { owner, repo, ...(branch && { branch }), folderMappings };
-                        sources.push(repoSource);
-                        await RepoStorage.setSources(context, sources);
-
-                        logger.info('New repository source added with custom folder mappings:', {
-                            owner, repo,
-                            baseUrl: baseUrl || 'github.com',
-                            folderMappings
-                        });
-
-                        const displayUrl = baseUrl ? `${baseUrl}/${owner}/${repo}` : `${owner}/${repo}`;
-                        statusBarManager.showSuccess(`Successfully added: ${displayUrl} (with custom folder mappings)`);
-                        treeProvider.refresh();
-                        continue;
-                    }
-
-                    // Create repo source object with baseUrl and optional branch if needed
-                    const repoSource = baseUrl
-                        ? { owner, repo, baseUrl, ...(branch && { branch }) }
-                        : { owner, repo, ...(branch && { branch }) };
-                    sources.push(repoSource);
-                    await RepoStorage.setSources(context, sources);
-
-                    // Log the successful addition
-                    logger.info('New repository source added:', {
-                        owner,
-                        repo,
-                        baseUrl: baseUrl || 'github.com',
-                        branch: branch || '(default)',
-                        foundFolders,
-                        displayUrl: baseUrl ? `${baseUrl}/${owner}/${repo}` : `${owner}/${repo}`
-                    });
-
-                    const displayUrl = baseUrl ? `${baseUrl}/${owner}/${repo}` : `${owner}/${repo}`;
-                    const branchSuffix = branch ? ` (branch: ${branch})` : '';
-
-                    // Create success message with found folders
-                    let successMessage = `✅ Successfully added: ${displayUrl}${branchSuffix}`;
-                    if (foundFolders.length > 0) {
-                        successMessage += `\n📁 Found folders: ${foundFolders.join(', ')}`;
-                        if (missingFolders.length > 0) {
-                            successMessage += `\n⚠️ Missing folders: ${missingFolders.join(', ')} (optional)`;
-                        }
-                    }
-
-                    statusBarManager.showSuccess(`✅ Successfully added: ${displayUrl}${branchSuffix}`);                } catch (err: any) {
-                    // Enhanced error handling with detailed diagnostics
-                    const errorMessage = (err && err.message) || err;
-                    const statusCode = err.response?.status;
-                    const responseData = err.response?.data;
-
-                    logger.error('Repository validation error:', {
-                        error: errorMessage,
-                        statusCode,
-                        responseData,
-                        owner,
-                        repo,
-                        baseUrl,
-                        input: input,
-                        apiUrl: baseUrl ? `${baseUrl}/api/v3/repos/${owner}/${repo}/contents/` : `https://api.github.com/repos/${owner}/${repo}/contents/`
-                    });
-
-                    if (statusCode === 404) {
-                        // 404 Not Found - Repository or path doesn't exist
-                        const repoUrl = baseUrl ? `${baseUrl}/${owner}/${repo}` : `https://github.com/${owner}/${repo}`;
-
-                        // Debug the URL construction
-                        logger.error('404 Error URL construction debug:', {
-                            owner: `"${owner}"`,
-                            repo: `"${repo}"`,
-                            baseUrl: `"${baseUrl}"`,
-                            repoUrl: `"${repoUrl}"`,
-                            originalInput: `"${input}"`
-                        });
-
-                        const retryChoice = await vscode.window.showErrorMessage(
-                            `🔍 Repository Not Found or No Valid Content\n\nThe repository ${owner}/${repo} was not found or doesn't contain any of the required content folders (plugins, instructions, prompts).\n\nPlease verify:\n1. Repository exists at: ${repoUrl}\n2. Repository is public or you have access\n3. Repository contains at least one of: plugins, instructions, or prompts folders\n\nNote: A repository only needs to have ONE of these folders, not all of them.\n\nDebug: Input="${input}", Owner="${owner}", Repo="${repo}"`,
-                            'Check Repository',
-                            'Retry',
-                            'Cancel'
-                        );
-
-                        if (retryChoice === 'Check Repository') {
-                            await vscode.env.openExternal(vscode.Uri.parse(repoUrl));
-                        } else if (retryChoice === 'Retry') {
-                            continue;
-                        }
-                    } else if (baseUrl && (statusCode === 401 || errorMessage.includes('401') || errorMessage.includes('Unauthorized'))) {
-                        // Authentication error for enterprise GitHub
-                        const retryChoice = await vscode.window.showErrorMessage(
-                            `🔐 Authentication Required (401)\n\nFailed to access ${baseUrl}/${owner}/${repo}.\n\nPlease configure your Personal Access Token using "Configure Enterprise Token" command.`,
-                            'Configure Token',
-                            'Retry',
-                            'Cancel'
-                        );
-
-                        if (retryChoice === 'Configure Token') {
-                            // Run the token configuration command
-                            await vscode.commands.executeCommand('vscode-git-copilot-tools.configureEnterpriseToken');
-                        } else if (retryChoice === 'Retry') {
-                            // Let user try again in the main loop
-                            continue;
-                        }
-                    } else if (statusCode === 403) {
-                        // Forbidden - Rate limit or access denied
-                        const retryChoice = await vscode.window.showErrorMessage(
-                            `🚫 Access Forbidden (403)\n\nAccess to ${owner}/${repo} is forbidden. This could be due to:\n1. Repository is private and you don't have access\n2. API rate limit exceeded\n3. Token doesn't have required permissions`,
-                            'Configure Token',
-                            'Retry',
-                            'Cancel'
-                        );
-
-                        if (retryChoice === 'Configure Token') {
-                            await vscode.commands.executeCommand('vscode-git-copilot-tools.configureEnterpriseToken');
-                        } else if (retryChoice === 'Retry') {
-                            continue;
-                        }
-                    } else {
-                        // Other errors
-                        vscode.window.showErrorMessage(`❌ Failed to add repository: ${errorMessage}${statusCode ? ` (${statusCode})` : ''}`);
-                    }
-                }
+                await addRepository(context, source, sources, githubService, statusBarManager, treeProvider);
             } else if (pick.label === 'Remove Repository') {
                 if (sources.length === 1) {
                     vscode.window.showWarningMessage('At least one source is required.');
                     continue;
                 }
                 const toRemove = await vscode.window.showQuickPick(
-                    sources.map((s: any) => ({ label: `${s.owner}/${s.repo}`, source: s })),
+                    sources.map(s => ({ label: `${s.owner}/${s.repo}`, source: s })),
                     { placeHolder: 'Select a repo to remove' }
                 );
                 if (!toRemove) { continue; }
@@ -500,7 +131,7 @@ export async function activate(context: vscode.ExtensionContext) {
                 // Clear cache for the repository being removed
                 githubService.clearRepoCache(toRemove.source);
 
-                sources = sources.filter((s: any) => `${s.owner}/${s.repo}` !== toRemove.label);
+                sources = sources.filter(s => `${s.owner}/${s.repo}` !== toRemove.label);
                 await RepoStorage.setSources(context, sources);
 
                 // Refresh the tree provider to update the UI
@@ -519,17 +150,10 @@ export async function activate(context: vscode.ExtensionContext) {
 
                 statusBarManager.showSuccess('Sources reset to default');
             } else if (pick.label === 'View Sources') {
-                statusBarManager.showInfo('Current sources: ' + sources.map((s: any) => `${s.owner}/${s.repo}`).join(', '), 8000);
+                statusBarManager.showInfo('Current sources: ' + sources.map(s => `${s.owner}/${s.repo}`).join(', '), 8000);
             }
         }
     });
-
-	// Initialize services
-	const statusBarManager = new StatusBarManager();
-	const githubService = new GitHubService(statusBarManager);
-	const downloadTracker = new DownloadTracker(context);
-	const treeProvider = new VscodeGitCopilotToolsProvider(githubService, context, downloadTracker);
-	const previewProvider = new CopilotPreviewProvider();
 
     // Initialize repository sources from settings
     await RepoStorage.initializeFromSettings(context);
@@ -541,49 +165,60 @@ export async function activate(context: vscode.ExtensionContext) {
         statusBarManager.showInfo('Repository sources updated from settings');
     });
 
-	// Register search webview provider for Activity Bar view
-	const searchViewProvider = new SearchViewProvider(context.extensionUri, treeProvider.getSearchBar());
-	const searchView = vscode.window.registerWebviewViewProvider('vscodeGitCopilotToolsSearch', searchViewProvider, {
-		webviewOptions: {
-			retainContextWhenHidden: true
-		}
-	});
+    // Apply certificate handling changes as soon as the setting changes
+    const requestSettingsDisposable = vscode.workspace.onDidChangeConfiguration(event => {
+        if (event.affectsConfiguration('vscode-git-copilot-tools.allowInsecureEnterpriseCerts')) {
+            githubService.applyRequestSettings();
+        }
+    });
 
-	// Register search webview provider for File Explorer view (shares same SearchBar)
-	const searchViewProviderSecondary = new SearchViewProvider(context.extensionUri, treeProvider.getSearchBar());
-	const searchViewSecondary = vscode.window.registerWebviewViewProvider('vscodeGitCopilotToolsSearchSecondary', searchViewProviderSecondary, {
-		webviewOptions: {
-			retainContextWhenHidden: true
-		}
-	});
+    // Reload with the new session after signing in from a prompt
+    const signInDisposable = githubService.onDidSignIn(() => {
+        githubService.clearCache();
+        treeProvider.refresh();
+    });
 
-	// Register providers - both views share the same data provider instance
-	const treeView = vscode.window.createTreeView('vscodeGitCopilotToolsExplorer', {
-		treeDataProvider: treeProvider,
-		showCollapseAll: true
-	});
+    // Register search webview provider for Activity Bar view
+    const searchViewProvider = new SearchViewProvider(context.extensionUri, treeProvider.getSearchBar());
+    const searchView = vscode.window.registerWebviewViewProvider('vscodeGitCopilotToolsSearch', searchViewProvider, {
+        webviewOptions: {
+            retainContextWhenHidden: true
+        }
+    });
 
-	// Register secondary view in explorer (shares same data provider)
-	const treeViewSecondary = vscode.window.createTreeView('vscodeGitCopilotToolsExplorerSecondary', {
-		treeDataProvider: treeProvider,
-		showCollapseAll: true
-	});
+    // Register search webview provider for File Explorer view (shares same SearchBar)
+    const searchViewProviderSecondary = new SearchViewProvider(context.extensionUri, treeProvider.getSearchBar());
+    const searchViewSecondary = vscode.window.registerWebviewViewProvider('vscodeGitCopilotToolsSearchSecondary', searchViewProviderSecondary, {
+        webviewOptions: {
+            retainContextWhenHidden: true
+        }
+    });
 
-	// Trigger initial load for both views
-	treeProvider.refresh();
+    // Register providers - both views share the same data provider instance
+    const treeView = vscode.window.createTreeView('vscodeGitCopilotToolsExplorer', {
+        treeDataProvider: treeProvider,
+        showCollapseAll: true
+    });
 
-	// Auto-preview when selecting a file (both views)
-	const handleSelection = async (e: vscode.TreeViewSelectionChangeEvent<any>) => {
-		if (e.selection.length > 0) {
-			const selectedItem = e.selection[0];
-			if (selectedItem.copilotItem) {
-				await previewCopilotItem(selectedItem.copilotItem, githubService, previewProvider);
-			}
-		}
-	};
+    // Register secondary view in explorer (shares same data provider)
+    const treeViewSecondary = vscode.window.createTreeView('vscodeGitCopilotToolsExplorerSecondary', {
+        treeDataProvider: treeProvider,
+        showCollapseAll: true
+    });
 
-	treeView.onDidChangeSelection(handleSelection);
-	treeViewSecondary.onDidChangeSelection(handleSelection);
+    // Trigger initial load for both views
+    treeProvider.refresh();
+
+    // Auto-preview when selecting a file (both views)
+    const handleSelection = async (e: vscode.TreeViewSelectionChangeEvent<VscodeGitCopilotToolsTreeItem>) => {
+        const selectedItem = e.selection[0];
+        if (selectedItem?.copilotItem) {
+            await previewCopilotItem(selectedItem.copilotItem, githubService, previewProvider);
+        }
+    };
+
+    treeView.onDidChangeSelection(handleSelection);
+    treeViewSecondary.onDidChangeSelection(handleSelection);
 
     const previewProviderDisposable = vscode.workspace.registerTextDocumentContentProvider('copilot-preview', previewProvider);
 
@@ -597,14 +232,14 @@ export async function activate(context: vscode.ExtensionContext) {
         statusBarManager.showSuccess('Refreshed Git Copilot Tools data');
     });
 
-	// Register download command
-	const downloadDisposable = vscode.commands.registerCommand('vscode-git-copilot-tools.downloadItem', async (treeItem?: VscodeGitCopilotToolsTreeItem) => {
-		if (!treeItem || !treeItem.copilotItem) {
-			vscode.window.showErrorMessage('No file selected for download');
-			return;
-		}
-		await downloadCopilotItem(treeItem.copilotItem, githubService, downloadTracker);
-	});
+    // Register download command
+    const downloadDisposable = vscode.commands.registerCommand('vscode-git-copilot-tools.downloadItem', async (treeItem?: VscodeGitCopilotToolsTreeItem) => {
+        if (!treeItem || !treeItem.copilotItem) {
+            vscode.window.showErrorMessage('No file selected for download');
+            return;
+        }
+        await downloadCopilotItem(treeItem.copilotItem, githubService, downloadTracker);
+    });
 
     // Register preview command
     const previewDisposable = vscode.commands.registerCommand('vscode-git-copilot-tools.previewItem', async (treeItem?: VscodeGitCopilotToolsTreeItem) => {
@@ -824,607 +459,482 @@ export async function activate(context: vscode.ExtensionContext) {
         }
     });
 
-	context.subscriptions.push(
-		refreshDisposable,
-		downloadDisposable,
-		previewDisposable,
-		manageSourcesDisposable,
-		removeRepoDisposable,
-		refreshRepoDisposable,
-		configTokenDisposable,
-		clearTokenDisposable,
-		toggleTreeViewDisposable,
-		showTreeViewDisposable,
-		hideTreeViewDisposable,
-		signInToGitHubDisposable,
-		signOutFromGitHubDisposable,
-		openRepoInBrowserDisposable,
-		configChangeDisposable,
-		searchView,
-		searchViewSecondary,
-		treeView,
-		treeViewSecondary,
-		previewProviderDisposable,
-		statusBarManager
-	);
+    context.subscriptions.push(
+        refreshDisposable,
+        downloadDisposable,
+        previewDisposable,
+        manageSourcesDisposable,
+        removeRepoDisposable,
+        refreshRepoDisposable,
+        configTokenDisposable,
+        clearTokenDisposable,
+        toggleTreeViewDisposable,
+        showTreeViewDisposable,
+        hideTreeViewDisposable,
+        signInToGitHubDisposable,
+        signOutFromGitHubDisposable,
+        openRepoInBrowserDisposable,
+        configChangeDisposable,
+        requestSettingsDisposable,
+        signInDisposable,
+        searchView,
+        searchViewSecondary,
+        treeView,
+        treeViewSecondary,
+        previewProviderDisposable,
+        githubService,
+        statusBarManager
+    );
+}
+
+/**
+ * Check a new source against GitHub and save it. One listing of the repository
+ * root shows which category folders exist; a repository with none of them
+ * offers the folder mapping panel instead.
+ */
+async function addRepository(
+    context: vscode.ExtensionContext,
+    source: RepositorySource,
+    sources: RepositorySource[],
+    githubService: GitHubService,
+    statusBarManager: StatusBarManager,
+    treeProvider: VscodeGitCopilotToolsProvider
+): Promise<void> {
+    const logger = getLogger();
+    const { owner, repo, baseUrl, branch } = source;
+
+    // Check for duplicate
+    if (sources.some(s => s.owner === owner && s.repo === repo)) {
+        vscode.window.showWarningMessage('Repository already added.');
+        return;
+    }
+
+    const displayUrl = baseUrl ? `${baseUrl}/${owner}/${repo}` : `${owner}/${repo}`;
+    const branchSuffix = branch ? ` (branch: ${branch})` : '';
+
+    // For enterprise GitHub, show info message
+    if (baseUrl) {
+        vscode.window.showInformationMessage(
+            `🔐 Enterprise GitHub Detected: ${displayUrl}\n\nPlease ensure you have configured your Personal Access Token using "Configure Enterprise Token" command.`
+        );
+        statusBarManager.showLoading(`Validating repository structure for ${owner}/${repo}...`);
+    }
+
+    try {
+        const rootEntries = await githubService.getDirectoryContents(source, '');
+        const foundFolders = ORDERED_CATEGORIES.filter(category =>
+            rootEntries.some(entry => entry.type === 'dir' && entry.name === category));
+
+        if (foundFolders.length === 0) {
+            // No default folders found - offer folder mapping configuration UI
+            const configChoice = await vscode.window.showInformationMessage(
+                `No standard content folders found in ${owner}/${repo}. Would you like to configure custom folder mappings?`,
+                'Configure Folders',
+                'Cancel'
+            );
+            if (configChoice !== 'Configure Folders') {
+                return;
+            }
+
+            const folderMappings = await showFolderMappingPanel(context.extensionUri, displayUrl);
+            if (!folderMappings) {
+                // User cancelled the folder mapping panel
+                return;
+            }
+
+            // Check that at least one mapping is set
+            const hasMapping = Object.values(folderMappings).some(v => v !== null && v !== undefined && v !== '');
+            if (!hasMapping) {
+                vscode.window.showWarningMessage('No folder mappings configured. Repository not added.');
+                return;
+            }
+
+            sources.push({ ...source, folderMappings });
+            await RepoStorage.setSources(context, sources);
+            logger.info('New repository source added with custom folder mappings:', {
+                owner, repo,
+                baseUrl: baseUrl || 'github.com',
+                folderMappings
+            });
+            statusBarManager.showSuccess(`Successfully added: ${displayUrl} (with custom folder mappings)`);
+            treeProvider.refresh();
+            return;
+        }
+
+        sources.push(source);
+        await RepoStorage.setSources(context, sources);
+
+        // Log the successful addition
+        logger.info('New repository source added:', {
+            owner,
+            repo,
+            baseUrl: baseUrl || 'github.com',
+            branch: branch || '(default)',
+            foundFolders,
+            displayUrl
+        });
+        statusBarManager.showSuccess(`✅ Successfully added: ${displayUrl}${branchSuffix}`);
+    } catch (err) {
+        await reportAddRepositoryError(err, source, displayUrl);
+    }
+}
+
+async function reportAddRepositoryError(err: unknown, source: RepositorySource, displayUrl: string): Promise<void> {
+    const { owner, repo, baseUrl, branch } = source;
+    const statusCode = err instanceof GitHubApiError ? err.status : undefined;
+
+    getLogger().error('Repository validation error:', {
+        error: errorText(err),
+        statusCode,
+        owner,
+        repo,
+        baseUrl,
+        branch
+    });
+
+    if (statusCode === 404) {
+        // 404 Not Found - the repository (or branch) does not exist, or is not visible
+        const repoUrl = baseUrl ? `${baseUrl}/${owner}/${repo}` : `https://github.com/${owner}/${repo}`;
+        const retryChoice = await vscode.window.showErrorMessage(
+            `🔍 Repository Not Found\n\n${owner}/${repo} was not found, or you do not have access to it.\n\nPlease verify:\n1. The repository exists at: ${repoUrl}\n2. The repository is public, or you have access to it${branch ? `\n3. The branch "${branch}" exists` : ''}`,
+            'Check Repository',
+            'Retry',
+            'Cancel'
+        );
+        if (retryChoice === 'Check Repository') {
+            await vscode.env.openExternal(vscode.Uri.parse(repoUrl));
+        }
+    } else if (statusCode === 401 && baseUrl) {
+        // Authentication error for enterprise GitHub
+        const retryChoice = await vscode.window.showErrorMessage(
+            `🔐 Authentication Required (401)\n\nFailed to access ${displayUrl}.\n\nPlease configure your Personal Access Token using "Configure Enterprise Token" command.`,
+            'Configure Token',
+            'Retry',
+            'Cancel'
+        );
+        if (retryChoice === 'Configure Token') {
+            await vscode.commands.executeCommand('vscode-git-copilot-tools.configureEnterpriseToken');
+        }
+    } else if (statusCode === 403) {
+        // Forbidden - Rate limit or access denied
+        const retryChoice = await vscode.window.showErrorMessage(
+            `🚫 Access Forbidden (403)\n\nAccess to ${owner}/${repo} is forbidden. This could be due to:\n1. Repository is private and you don't have access\n2. API rate limit exceeded\n3. Token doesn't have required permissions`,
+            'Configure Token',
+            'Retry',
+            'Cancel'
+        );
+        if (retryChoice === 'Configure Token') {
+            await vscode.commands.executeCommand('vscode-git-copilot-tools.configureEnterpriseToken');
+        }
+    } else {
+        // Other errors
+        vscode.window.showErrorMessage(`❌ Failed to add repository: ${errorText(err)}${statusCode ? ` (${statusCode})` : ''}`);
+    }
 }
 
 async function downloadCopilotItem(item: CopilotItem, githubService: GitHubService, downloadTracker: DownloadTracker): Promise<void> {
-	try {
-		const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-		if (!workspaceFolder) {
-			vscode.window.showErrorMessage('No workspace folder open');
-			return;
-		}
+    try {
+        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+        if (!workspaceFolder) {
+            vscode.window.showErrorMessage('No workspace folder open');
+            return;
+        }
+        const workspacePath = workspaceFolder.uri.fsPath;
 
-        // Get target folder path
-        const targetFolder = FOLDER_PATHS[item.category];
-        const fullTargetPath = path.join(workspaceFolder.uri.fsPath, targetFolder);
-
-        // Plugins: parse plugin.json and download individual items to category folders
-        if (item.category === CopilotCategory.Plugins && item.file.type === 'dir') {
-            // Fetch and parse plugin.json
-            let pluginResult;
-            try {
-                pluginResult = await githubService.parsePluginJson(item.repo, item.file.path);
-            } catch (error) {
-                vscode.window.showErrorMessage(`Failed to read plugin metadata: ${error}`);
-                return;
-            }
-
-            const metadata = pluginResult.metadata;
-            const pluginItems = metadata.items ?? [];
-
-            if (pluginItems.length === 0) {
-                vscode.window.showWarningMessage(`Plugin "${metadata.name}" has no items to download.`);
-                return;
-            }
-
-            // Show confirmation dialog with plugin details
-            const confirm = await vscode.window.showInformationMessage(
-                `Download plugin "${metadata.name}"?\n\n${metadata.description}\n\n${pluginItems.length} item(s) will be saved to their category folders.`,
-                { modal: true },
-                'Download'
-            );
-
-            if (confirm !== 'Download') {
-                return;
-            }
-
-            // Download each item from plugin.json
-            let downloadedCount = 0;
-            let errorCount = 0;
-            const downloadedFiles: string[] = [];
-            const failedFiles: string[] = [];
-
-            for (const pluginItem of pluginItems) {
-                try {
-                    const category = KIND_TO_CATEGORY[pluginItem.kind];
-                    if (!category) {
-                        getLogger().warn(`Unknown kind "${pluginItem.kind}" for item ${pluginItem.path}, skipping.`);
-                        failedFiles.push(`${pluginItem.path} (unknown kind: ${pluginItem.kind})`);
-                        errorCount++;
-                        continue;
-                    }
-
-                    const categoryFolder = FOLDER_PATHS[category];
-                    const fullCategoryPath = path.join(workspaceFolder.uri.fsPath, categoryFolder);
-
-                    // Ensure category directory exists
-                    if (!fs.existsSync(fullCategoryPath)) {
-                        fs.mkdirSync(fullCategoryPath, { recursive: true });
-                    }
-
-                    if (pluginItem.kind === 'skill') {
-                        // Skills are directories: use recursive download
-                        const skillDirName = pluginItem.path.split('/').pop() || pluginItem.path;
-                        const targetSkillPath = path.join(fullCategoryPath, skillDirName);
-
-                        if (fs.existsSync(targetSkillPath)) {
-                            fs.rmSync(targetSkillPath, { recursive: true, force: true });
-                        }
-                        fs.mkdirSync(targetSkillPath, { recursive: true });
-
-                        const contents = await githubService.getDirectoryContents(item.repo, pluginItem.path);
-                        for (const fileItem of contents) {
-                            if (fileItem.type === 'file') {
-                                const skillFolderPath = pluginItem.path.endsWith('/') ? pluginItem.path : pluginItem.path + '/';
-                                const relativePath = fileItem.path.startsWith(skillFolderPath)
-                                    ? fileItem.path.substring(skillFolderPath.length)
-                                    : fileItem.path;
-                                const targetFilePath = path.join(targetSkillPath, relativePath);
-
-                                const parentDir = path.dirname(targetFilePath);
-                                if (!fs.existsSync(parentDir)) {
-                                    fs.mkdirSync(parentDir, { recursive: true });
-                                }
-
-                                const content = await githubService.getFileContent(fileItem.download_url);
-                                fs.writeFileSync(targetFilePath, content, 'utf8');
-                            }
-                        }
-                        downloadedFiles.push(`${pluginItem.kind}: ${skillDirName} (${contents.filter(f => f.type === 'file').length} files)`);
-                    } else {
-                        // Instruction, prompt, or agent items.
-                        // In the current plugin.json format, agents may reference an entire directory
-                        // (e.g. "plugins/foo/agents" with no file extension). In that case, download all
-                        // files inside the directory to the category folder.
-                        const lastSegment = pluginItem.path.split('/').pop() || pluginItem.path;
-                        const isDirectoryRef = !lastSegment.includes('.');
-
-                        if (isDirectoryRef) {
-                            // Directory reference (e.g. agents dir) — download all contained files flat
-                            const contents = await githubService.getDirectoryContents(item.repo, pluginItem.path);
-                            for (const fileItem of contents) {
-                                if (fileItem.type === 'file') {
-                                    const targetFilePath = path.join(fullCategoryPath, fileItem.name);
-                                    const content = await githubService.getFileContent(fileItem.download_url);
-                                    fs.writeFileSync(targetFilePath, content, 'utf8');
-                                }
-                            }
-                            const fileCount = contents.filter(f => f.type === 'file').length;
-                            downloadedFiles.push(`${pluginItem.kind}: ${lastSegment}/ (${fileCount} files)`);
-                        } else {
-                            // Single file item
-                            const filename = lastSegment;
-                            const targetFilePath = path.join(fullCategoryPath, filename);
-                            const fileData = await githubService.getFileContentByPath(item.repo, pluginItem.path);
-                            fs.writeFileSync(targetFilePath, fileData.content, 'utf8');
-                            downloadedFiles.push(`${pluginItem.kind}: ${filename}`);
-                        }
-                    }
-
-                    downloadedCount++;
-                } catch (itemError) {
-                    getLogger().error(`Failed to download plugin item ${pluginItem.path}:`, itemError);
-                    failedFiles.push(`${pluginItem.path}`);
-                    errorCount++;
-                }
-            }
-
-            // Save plugin files locally (plugin.json, agents/, commands/, README.md, NOTE)
-            const pluginDir = path.join(fullTargetPath, metadata.id || item.name);
-            if (!fs.existsSync(pluginDir)) {
-                fs.mkdirSync(pluginDir, { recursive: true });
-            }
-
-            // Save plugin.json mirroring upstream structure (.github/plugin/plugin.json)
-            try {
-                const pluginJsonDir = path.join(pluginDir, '.github', 'plugin');
-                if (!fs.existsSync(pluginJsonDir)) {
-                    fs.mkdirSync(pluginJsonDir, { recursive: true });
-                }
-                fs.writeFileSync(
-                    path.join(pluginJsonDir, 'plugin.json'),
-                    JSON.stringify(metadata, null, 2),
-                    'utf8'
-                );
-            } catch (metaSaveError) {
-                getLogger().warn('Failed to save plugin.json locally:', metaSaveError);
-            }
-
-            // Download agents/, commands/, and README.md from the plugin directory
-            try {
-                const pluginContents = await githubService.getDirectoryContents(item.repo, item.file.path);
-                const topLevelItems = pluginContents.filter(f => {
-                    // Only top-level entries (direct children of the plugin dir)
-                    const relativePath = f.path.substring(item.file.path.length + 1);
-                    return !relativePath.includes('/');
-                });
-
-                // Download agents/ folder if it exists
-                const agentsDir = topLevelItems.find(f => f.type === 'dir' && f.name === 'agents');
-                if (agentsDir) {
-                    const agentsLocalDir = path.join(pluginDir, 'agents');
-                    if (!fs.existsSync(agentsLocalDir)) {
-                        fs.mkdirSync(agentsLocalDir, { recursive: true });
-                    }
-                    const agentFiles = pluginContents.filter(
-                        f => f.type === 'file' && f.path.startsWith(agentsDir.path + '/')
-                    );
-                    for (const agentFile of agentFiles) {
-                        try {
-                            const relativePath = agentFile.path.substring(agentsDir.path.length + 1);
-                            const targetFilePath = path.join(agentsLocalDir, relativePath);
-                            const parentDir = path.dirname(targetFilePath);
-                            if (!fs.existsSync(parentDir)) {
-                                fs.mkdirSync(parentDir, { recursive: true });
-                            }
-                            const content = await githubService.getFileContent(agentFile.download_url);
-                            fs.writeFileSync(targetFilePath, content, 'utf8');
-                        } catch (agentErr) {
-                            getLogger().warn(`Failed to download agent file ${agentFile.name}:`, agentErr);
-                        }
-                    }
-                }
-
-                // Download commands/ folder if it exists
-                const commandsDir = topLevelItems.find(f => f.type === 'dir' && f.name === 'commands');
-                if (commandsDir) {
-                    const commandsLocalDir = path.join(pluginDir, 'commands');
-                    if (!fs.existsSync(commandsLocalDir)) {
-                        fs.mkdirSync(commandsLocalDir, { recursive: true });
-                    }
-                    const commandFiles = pluginContents.filter(
-                        f => f.type === 'file' && f.path.startsWith(commandsDir.path + '/')
-                    );
-                    for (const commandFile of commandFiles) {
-                        try {
-                            const relativePath = commandFile.path.substring(commandsDir.path.length + 1);
-                            const targetFilePath = path.join(commandsLocalDir, relativePath);
-                            const parentDir = path.dirname(targetFilePath);
-                            if (!fs.existsSync(parentDir)) {
-                                fs.mkdirSync(parentDir, { recursive: true });
-                            }
-                            const content = await githubService.getFileContent(commandFile.download_url);
-                            fs.writeFileSync(targetFilePath, content, 'utf8');
-                        } catch (cmdErr) {
-                            getLogger().warn(`Failed to download command file ${commandFile.name}:`, cmdErr);
-                        }
-                    }
-                }
-
-                // Download README.md if it exists
-                const readmeFile = topLevelItems.find(f => f.type === 'file' && f.name === 'README.md');
-                let readmeContent = '';
-                if (readmeFile) {
-                    try {
-                        readmeContent = await githubService.getFileContent(readmeFile.download_url);
-                        fs.writeFileSync(path.join(pluginDir, 'README.md'), readmeContent, 'utf8');
-                    } catch (readmeErr) {
-                        getLogger().warn('Failed to download plugin README.md:', readmeErr);
-                    }
-                }
-
-                // Generate NOTE.VSCODE-VSCODE-GIT-COPILOT-TOOLS-EXTENSION.md with slash command mappings
-                const pluginName = metadata.id || item.name;
-                const noteContent = generateNoteContent(readmeContent, pluginName);
-                fs.writeFileSync(
-                    path.join(pluginDir, 'NOTE.VSCODE-VSCODE-GIT-COPILOT-TOOLS-EXTENSION.md'),
-                    noteContent,
-                    'utf8'
-                );
-            } catch (pluginFilesError) {
-                getLogger().warn('Failed to download additional plugin files:', pluginFilesError);
-            }
-
-            // Record download and clear cache
-            await downloadTracker.recordDownload(item);
-            githubService.clearCategoryCache(item.repo, item.category);
-
-            // Show summary
-            let summaryMessage = `Plugin "${metadata.name}" downloaded!\n\n`;
-            summaryMessage += `Downloaded ${downloadedCount}/${pluginItems.length} item(s) successfully.`;
-            if (errorCount > 0) {
-                summaryMessage += `\n${errorCount} item(s) failed.`;
-            }
-
-            vscode.window.showInformationMessage(summaryMessage);
+        // Plugins: each item listed in plugin.json goes to its own category folder
+        if (item.category === 'plugins' && item.file.type === 'dir') {
+            await downloadPluginItems(item, workspacePath, githubService, downloadTracker);
             return;
         }
 
-        // Hooks are folders - download the entire directory to .github/hooks/<name>/
-        if (item.category === CopilotCategory.Hooks && item.file.type === 'dir') {
-            const folderName = await vscode.window.showInputBox({
-                prompt: `Download hook folder ${item.name} to ${targetFolder}`,
-                value: item.name,
-                validateInput: (value) => {
-                    if (!value || value.trim() === '') {
-                        return 'Folder name cannot be empty';
-                    }
-                    return null;
-                }
-            });
-
-            if (!folderName) {
-                return;
-            }
-
-            const targetHookPath = path.join(fullTargetPath, folderName);
-
-            if (fs.existsSync(targetHookPath)) {
-                const overwrite = await vscode.window.showWarningMessage(
-                    `Hook folder ${folderName} already exists. Do you want to overwrite it?`,
-                    'Overwrite', 'Cancel'
-                );
-                if (overwrite !== 'Overwrite') {
-                    return;
-                }
-                fs.rmSync(targetHookPath, { recursive: true, force: true });
-            }
-
-            fs.mkdirSync(targetHookPath, { recursive: true });
-
-            const contents = await githubService.getDirectoryContents(item.repo, item.file.path);
-
-            for (const fileItem of contents) {
-                if (fileItem.type === 'file') {
-                    const hookFolderPath = item.file.path.endsWith('/') ? item.file.path : item.file.path + '/';
-                    const relativePath = fileItem.path.startsWith(hookFolderPath)
-                        ? fileItem.path.substring(hookFolderPath.length)
-                        : fileItem.path;
-                    const targetFilePath = path.join(targetHookPath, relativePath);
-
-                    const parentDir = path.dirname(targetFilePath);
-                    if (!fs.existsSync(parentDir)) {
-                        fs.mkdirSync(parentDir, { recursive: true });
-                    }
-
-                    const content = await githubService.getFileContent(fileItem.download_url);
-                    fs.writeFileSync(targetFilePath, content, 'utf8');
-                }
-            }
-
-            await downloadTracker.recordDownload(item);
-            githubService.clearCategoryCache(item.repo, item.category);
-
-            const fileCount = contents.filter(f => f.type === 'file').length;
-            const openFolder = await vscode.window.showInformationMessage(
-                `Successfully downloaded hook folder ${folderName} (${fileCount} file(s))`,
-                'Open Folder'
-            );
-
-            if (openFolder === 'Open Folder') {
-                await vscode.commands.executeCommand('revealInExplorer', vscode.Uri.file(targetHookPath));
-            }
-            return;
-        }
-
-        // Skills are folders - handle them differently
-        if (item.category === CopilotCategory.Skills && item.file.type === 'dir') {
-            // Show input box for folder name confirmation
-            const folderName = await vscode.window.showInputBox({
-                prompt: `Download skill folder ${item.name} to ${targetFolder}`,
-                value: item.name,
-                validateInput: (value) => {
-                    if (!value || value.trim() === '') {
-                        return 'Folder name cannot be empty';
-                    }
-                    return null;
-                }
-            });
-
-            if (!folderName) {
-                return; // User cancelled
-            }
-
-            const targetSkillPath = path.join(fullTargetPath, folderName);
-
-            // Check if folder exists
-            if (fs.existsSync(targetSkillPath)) {
-                const overwrite = await vscode.window.showWarningMessage(
-                    `Skill folder ${folderName} already exists. Do you want to overwrite it?`,
-                    'Overwrite', 'Cancel'
-                );
-
-                if (overwrite !== 'Overwrite') {
-                    return;
-                }
-
-                // Remove existing folder
-                fs.rmSync(targetSkillPath, { recursive: true, force: true });
-            }
-
-            // Create skill folder
-            fs.mkdirSync(targetSkillPath, { recursive: true });
-
-            // Get all contents of the skill folder recursively
-            const contents = await githubService.getDirectoryContents(item.repo, item.file.path);
-
-            // Download each file in the skill folder
-            for (const fileItem of contents) {
-                if (fileItem.type === 'file') {
-                    // Calculate relative path within the skill folder
-                    // Remove the skill folder path prefix to get the relative path
-                    const skillFolderPath = item.file.path.endsWith('/') ? item.file.path : item.file.path + '/';
-                    const relativePath = fileItem.path.startsWith(skillFolderPath)
-                        ? fileItem.path.substring(skillFolderPath.length)
-                        : fileItem.path;
-                    const targetFilePath = path.join(targetSkillPath, relativePath);
-
-                    // Create parent directory if needed
-                    const parentDir = path.dirname(targetFilePath);
-                    if (!fs.existsSync(parentDir)) {
-                        fs.mkdirSync(parentDir, { recursive: true });
-                    }
-
-					// Download and save file
-					const content = await githubService.getFileContent(fileItem.download_url);
-					fs.writeFileSync(targetFilePath, content, 'utf8');
-				}
-			}
-
-			// Record the download
-			await downloadTracker.recordDownload(item);
-
-			// Clear cache for this category to force fresh metadata on next refresh
-			githubService.clearCategoryCache(item.repo, item.category);
-
-            // Show success message
-            const openFolder = await vscode.window.showInformationMessage(
-                `Successfully downloaded skill folder ${folderName}`,
-                'Open Folder'
-            );
-
-            if (openFolder === 'Open Folder') {
-                // Open the SKILL.md file if it exists
-                const skillMdPath = path.join(targetSkillPath, 'SKILL.md');
-                if (fs.existsSync(skillMdPath)) {
-                    const document = await vscode.workspace.openTextDocument(skillMdPath);
-                    await vscode.window.showTextDocument(document);
-                } else {
-                    // If no SKILL.md, just reveal the folder
-                    await vscode.commands.executeCommand('revealInExplorer', vscode.Uri.file(targetSkillPath));
-                }
-            }
+        const categoryDir = categoryDirFor(workspacePath, item);
+        const targetFolder = toDisplayPath(workspacePath, categoryDir);
+        if (item.file.type === 'dir') {
+            await downloadFolder(item, workspacePath, categoryDir, targetFolder, githubService, downloadTracker);
         } else {
-            // Regular file download (for other categories)
-            // Show input box for filename confirmation
-            const filename = await vscode.window.showInputBox({
-                prompt: `Download ${item.name} to ${targetFolder}`,
-                value: item.name,
-                validateInput: (value) => {
-                    if (!value || value.trim() === '') {
-                        return 'Filename cannot be empty';
-                    }
-                    return null;
-                }
-            });
+            await downloadSingleFile(item, workspacePath, categoryDir, targetFolder, githubService, downloadTracker);
+        }
+    } catch (error) {
+        vscode.window.showErrorMessage(`Failed to download ${item.name}: ${errorText(error)}`);
+    }
+}
 
-            if (!filename) {
-                return; // User cancelled
-            }
+/** Download a plugin item by item, then add the slash command note to its folder. */
+async function downloadPluginItems(
+    item: CopilotItem,
+    workspacePath: string,
+    githubService: GitHubService,
+    downloadTracker: DownloadTracker
+): Promise<void> {
+    let parsed: PluginParseResult;
+    try {
+        parsed = await githubService.parsePluginJson(item.repo, item.file.path);
+    } catch (error) {
+        vscode.window.showErrorMessage(`Failed to read plugin metadata: ${errorText(error)}`);
+        return;
+    }
 
-            const targetFilePath = path.join(fullTargetPath, filename);
+    const metadata = parsed.metadata;
+    const itemCount = metadata.items?.length ?? 0;
+    if (itemCount === 0) {
+        // A plugin can hold only content this extension does not install, such as Copilot extensions
+        const skipped = getSkippedPluginEntries(metadata);
+        vscode.window.showWarningMessage(skipped.length > 0
+            ? `Plugin "${metadata.name}" has no agents, skills, hooks, instructions, or prompts to download. Skipped: ${skipped.join('; ')}`
+            : `Plugin "${metadata.name}" has no items to download.`);
+        return;
+    }
 
-            // Check if file exists
-            if (fs.existsSync(targetFilePath)) {
-                const overwrite = await vscode.window.showWarningMessage(
-                    `File ${filename} already exists. Do you want to overwrite it?`,
-                    'Overwrite', 'Cancel'
-                );
+    // Show confirmation dialog with plugin details
+    const confirm = await vscode.window.showInformationMessage(
+        `Download plugin "${metadata.name}"?\n\n${metadata.description}\n\n${itemCount} item(s) will be saved to their category folders.`,
+        { modal: true },
+        'Download'
+    );
+    if (confirm !== 'Download') {
+        return;
+    }
 
-                if (overwrite !== 'Overwrite') {
-                    return;
-                }
-            }
+    const result = await githubService.downloadPlugin(item, workspacePath);
+    for (const failure of result.failed) {
+        getLogger().error(`Failed to download plugin item ${failure}`);
+    }
+    for (const notice of result.notices) {
+        getLogger().warn(`Plugin entry not downloaded: ${notice}`);
+    }
 
-            // Create directory if it doesn't exist
-            if (!fs.existsSync(fullTargetPath)) {
-                fs.mkdirSync(fullTargetPath, { recursive: true });
-            }
+    // NOTE file with the plugin's slash commands, read from its README
+    try {
+        const noteContent = generateNoteContent(result.readmeContent, result.metadata.id || item.name);
+        fs.writeFileSync(path.join(result.pluginDir, NOTE_FILE_NAME), noteContent, 'utf8');
+    } catch (noteError) {
+        getLogger().warn('Failed to write the plugin note:', noteError);
+    }
 
-			// Fetch content and save file
-			const content = await githubService.getFileContent(item.file.download_url);
-			fs.writeFileSync(targetFilePath, content, 'utf8');
+    // Record download and clear cache
+    await downloadTracker.recordDownload(item);
+    githubService.clearCategoryCache(item.repo, item.category);
 
-			// Record the download with content for hash calculation
-			await downloadTracker.recordDownload(item, content);
+    // Show summary
+    let summaryMessage = `Plugin "${metadata.name}" downloaded!\n\n`;
+    summaryMessage += `Downloaded ${result.downloaded.length}/${itemCount} item(s) successfully.`;
+    if (result.failed.length > 0) {
+        summaryMessage += `\n${result.failed.length} item(s) failed.`;
+    }
+    if (result.notices.length > 0) {
+        summaryMessage += `\nNot downloaded: ${result.notices.join('; ')}`;
+    }
+    vscode.window.showInformationMessage(summaryMessage);
+}
 
-			// Clear cache for this category to force fresh metadata on next refresh
-			githubService.clearCategoryCache(item.repo, item.category);
+/** Download a hook, skill, or other folder under a name the user confirms. */
+async function downloadFolder(
+    item: CopilotItem,
+    workspacePath: string,
+    categoryDir: string,
+    targetFolder: string,
+    githubService: GitHubService,
+    downloadTracker: DownloadTracker
+): Promise<void> {
+    const label = FOLDER_LABELS[item.category] ?? 'folder';
+    const folderName = await vscode.window.showInputBox({
+        prompt: `Download ${label} ${item.name} to ${targetFolder}`,
+        value: item.name,
+        validateInput: value => validateDownloadName(value, 'Folder name cannot be empty')
+    });
+    if (!folderName) {
+        return; // User cancelled
+    }
 
-            // Show success message and offer to open file
-            const openFile = await vscode.window.showInformationMessage(
-                `Successfully downloaded ${filename}`,
-                'Open File'
-            );
+    const name = folderName.trim();
+    const targetPath = path.join(categoryDir, name);
 
-            if (openFile === 'Open File') {
-                const document = await vscode.workspace.openTextDocument(targetFilePath);
+    // Check if folder exists
+    if (fs.existsSync(targetPath)) {
+        const overwrite = await vscode.window.showWarningMessage(
+            `${capitalize(label)} ${name} already exists. Do you want to overwrite it?`,
+            'Overwrite', 'Cancel'
+        );
+        if (overwrite !== 'Overwrite') {
+            return;
+        }
+        // Remove existing folder so files deleted upstream do not linger
+        fs.rmSync(targetPath, { recursive: true, force: true });
+    }
+
+    const meta = await githubService.downloadItem(item, workspacePath, name);
+    await downloadTracker.recordDownload(item, meta);
+
+    // Clear cache for this category to force fresh metadata on next refresh
+    githubService.clearCategoryCache(item.repo, item.category);
+
+    if (item.category === 'skills') {
+        const openFolder = await vscode.window.showInformationMessage(
+            `Successfully downloaded skill folder ${name}`,
+            'Open Folder'
+        );
+        if (openFolder === 'Open Folder') {
+            // Open the SKILL.md file if it exists
+            const skillMdPath = path.join(meta.localPath, 'SKILL.md');
+            if (fs.existsSync(skillMdPath)) {
+                const document = await vscode.workspace.openTextDocument(skillMdPath);
                 await vscode.window.showTextDocument(document);
+            } else {
+                // If no SKILL.md, just reveal the folder
+                await vscode.commands.executeCommand('revealInExplorer', vscode.Uri.file(meta.localPath));
             }
         }
+        return;
+    }
 
-    } catch (error) {
-        vscode.window.showErrorMessage(`Failed to download ${item.name}: ${error}`);
+    const openFolder = await vscode.window.showInformationMessage(
+        `Successfully downloaded ${label} ${name} (${countFiles(meta.localPath)} file(s))`,
+        'Open Folder'
+    );
+    if (openFolder === 'Open Folder') {
+        await vscode.commands.executeCommand('revealInExplorer', vscode.Uri.file(meta.localPath));
+    }
+}
+
+/** Download one file under a name the user confirms. */
+async function downloadSingleFile(
+    item: CopilotItem,
+    workspacePath: string,
+    categoryDir: string,
+    targetFolder: string,
+    githubService: GitHubService,
+    downloadTracker: DownloadTracker
+): Promise<void> {
+    // Show input box for filename confirmation
+    const filename = await vscode.window.showInputBox({
+        prompt: `Download ${item.name} to ${targetFolder}`,
+        value: item.name,
+        validateInput: value => validateDownloadName(value, 'Filename cannot be empty')
+    });
+    if (!filename) {
+        return; // User cancelled
+    }
+
+    const name = filename.trim();
+
+    // Check if file exists
+    if (fs.existsSync(path.join(categoryDir, name))) {
+        const overwrite = await vscode.window.showWarningMessage(
+            `File ${name} already exists. Do you want to overwrite it?`,
+            'Overwrite', 'Cancel'
+        );
+        if (overwrite !== 'Overwrite') {
+            return;
+        }
+    }
+
+    const meta = await githubService.downloadItem(item, workspacePath, name);
+    await downloadTracker.recordDownload(item, meta);
+
+    // Clear cache for this category to force fresh metadata on next refresh
+    githubService.clearCategoryCache(item.repo, item.category);
+
+    // Show success message and offer to open file
+    const openFile = await vscode.window.showInformationMessage(
+        `Successfully downloaded ${name}`,
+        'Open File'
+    );
+    if (openFile === 'Open File') {
+        const document = await vscode.workspace.openTextDocument(meta.localPath);
+        await vscode.window.showTextDocument(document);
     }
 }
 
 async function previewCopilotItem(item: CopilotItem, githubService: GitHubService, previewProvider: CopilotPreviewProvider): Promise<void> {
     try {
-        // For Skills folders, preview the SKILL.md file
-        if (item.category === CopilotCategory.Skills && item.file.type === 'dir') {
-            // Get the contents of the skill folder
-            const contents = await githubService.getDirectoryContents(item.repo, item.file.path);
-
-            // Find SKILL.md file
-            const skillMdFile = contents.find(f => f.name === 'SKILL.md' && f.type === 'file');
-
-            if (skillMdFile) {
-                // Fetch SKILL.md content
-                item.content = await githubService.getFileContent(skillMdFile.download_url);
-
-                // Create and show preview document
-                const previewUri = vscode.Uri.parse(`copilot-preview:${encodeURIComponent(item.name + '/SKILL.md')}`);
-
-                // Set the item content in the preview provider
-                previewProvider.setItem(previewUri, item);
-
-                const doc = await vscode.workspace.openTextDocument(previewUri);
-                await vscode.window.showTextDocument(doc, { preview: true });
-            } else {
-                // No SKILL.md found, show list of files in the folder
-                const skillFolderPath = item.file.path.endsWith('/') ? item.file.path : item.file.path + '/';
-                const fileList = contents
-                    .filter(f => f.type === 'file')
-                    .map(f => {
-                        const relativePath = f.path.startsWith(skillFolderPath)
-                            ? f.path.substring(skillFolderPath.length)
-                            : f.path;
-                        return `- ${relativePath}`;
-                    })
-                    .join('\n');
-
-                item.content = `# ${item.name}\n\n**Skill Folder Contents:**\n\n${fileList}\n\nDownload this skill to get all files.`;
-
-                const previewUri = vscode.Uri.parse(`copilot-preview:${encodeURIComponent(item.name)}`);
-                previewProvider.setItem(previewUri, item);
-
-                const doc = await vscode.workspace.openTextDocument(previewUri);
-                await vscode.window.showTextDocument(doc, { preview: true });
-            }
-        } else if (item.category === CopilotCategory.Plugins && item.file.type === 'dir') {
+        if (item.category === 'plugins' && item.file.type === 'dir') {
             // For Plugin directories, show plugin.json metadata + README.md
-            let previewContent = '';
-
-            // Fetch plugin.json for metadata
-            try {
-                const pluginResult = await githubService.parsePluginJson(item.repo, item.file.path);
-                const meta = pluginResult.metadata;
-                previewContent += `# ${meta.name}\n\n`;
-                previewContent += `${meta.description}\n\n`;
-                if (meta.version) { previewContent += `**Version:** ${meta.version}\n`; }
-                if (meta.author?.name) { previewContent += `**Author:** ${meta.author.name}\n`; }
-                if (meta.license) { previewContent += `**License:** ${meta.license}\n`; }
-                if (meta.tags?.length) { previewContent += `**Tags:** ${meta.tags.join(', ')}\n`; }
-                const metaItems = meta.items ?? [];
-                previewContent += `\n**Items (${metaItems.length}):**\n`;
-                metaItems.forEach(pi => {
-                    const filename = pi.path.split('/').pop() || pi.path;
-                    previewContent += `- ${filename} (${pi.kind})\n`;
-                });
-                previewContent += '\n---\n\n';
-            } catch {
-                // plugin.json not available, continue without metadata
-            }
-
-            // Fetch README.md for additional preview content
+            item.content = await buildPluginPreview(item, githubService);
+            await showPreview(previewProvider, item, `${item.name}/README.md`);
+        } else if (item.file.type === 'dir') {
+            // For Skills folders, preview the SKILL.md file
             const contents = await githubService.getDirectoryContents(item.repo, item.file.path);
-            const readmeMdFile = contents.find(f => f.name === 'README.md' && f.type === 'file');
+            const skillMdFile = item.category === 'skills'
+                ? contents.find(f => f.name === 'SKILL.md' && f.type === 'file')
+                : undefined;
 
-            if (readmeMdFile) {
-                const readmeContent = await githubService.getFileContent(readmeMdFile.download_url);
-                previewContent += readmeContent;
-            } else if (!previewContent) {
-                previewContent = `# ${item.name}\n\n*(No plugin metadata or README found)*`;
+            if (skillMdFile?.download_url) {
+                item.content = await githubService.getFileContent(item.repo, skillMdFile.download_url);
+                await showPreview(previewProvider, item, `${item.name}/SKILL.md`);
+            } else {
+                // No SKILL.md (or not a skill): show the list of files in the folder
+                item.content = await buildFolderListing(item, githubService);
+                await showPreview(previewProvider, item, item.name);
             }
-
-            item.content = previewContent;
-            const previewUri = vscode.Uri.parse(`copilot-preview:${encodeURIComponent(item.name + '/README.md')}`);
-            previewProvider.setItem(previewUri, item);
-            const doc = await vscode.workspace.openTextDocument(previewUri);
-            await vscode.window.showTextDocument(doc, { preview: true });
         } else {
             // Regular file preview (for other categories)
             // Fetch content if not already cached
-            if (!item.content) {
-                item.content = await githubService.getFileContent(item.file.download_url);
+            if (!item.content && item.file.download_url) {
+                item.content = await githubService.getFileContent(item.repo, item.file.download_url);
             }
-
-            // Create and show preview document
-            const previewUri = vscode.Uri.parse(`copilot-preview:${encodeURIComponent(item.name)}`);
-
-            // Set the item content in the preview provider
-            previewProvider.setItem(previewUri, item);
-
-            const doc = await vscode.workspace.openTextDocument(previewUri);
-            await vscode.window.showTextDocument(doc, { preview: true });
+            await showPreview(previewProvider, item, item.name);
         }
-
     } catch (error) {
-        vscode.window.showErrorMessage(`Failed to preview ${item.name}: ${error}`);
+        vscode.window.showErrorMessage(`Failed to preview ${item.name}: ${errorText(error)}`);
     }
+}
+
+async function showPreview(previewProvider: CopilotPreviewProvider, item: CopilotItem, documentName: string): Promise<void> {
+    const previewUri = vscode.Uri.parse(`copilot-preview:${encodeURIComponent(documentName)}`);
+
+    // Set the item content in the preview provider
+    previewProvider.setItem(previewUri, item);
+
+    const doc = await vscode.workspace.openTextDocument(previewUri);
+    await vscode.window.showTextDocument(doc, { preview: true });
+}
+
+async function buildPluginPreview(item: CopilotItem, githubService: GitHubService): Promise<string> {
+    let previewContent = '';
+
+    // Fetch plugin.json for metadata
+    try {
+        const { metadata: meta } = await githubService.parsePluginJson(item.repo, item.file.path);
+        previewContent += `# ${meta.name}\n\n`;
+        previewContent += `${meta.description}\n\n`;
+        if (meta.version) { previewContent += `**Version:** ${meta.version}\n`; }
+        if (meta.author?.name) { previewContent += `**Author:** ${meta.author.name}\n`; }
+        if (meta.license) { previewContent += `**License:** ${meta.license}\n`; }
+        if (meta.tags?.length) { previewContent += `**Tags:** ${meta.tags.join(', ')}\n`; }
+        const metaItems = meta.items ?? [];
+        previewContent += `\n**Items (${metaItems.length}):**\n`;
+        for (const pluginItem of metaItems) {
+            const filename = pluginItem.path.split('/').pop() || pluginItem.path;
+            previewContent += `- ${filename} (${pluginItem.kind})\n`;
+        }
+        previewContent += '\n---\n\n';
+    } catch {
+        // plugin.json not available, continue without metadata
+    }
+
+    // Fetch README.md for additional preview content
+    const contents = await githubService.getDirectoryContents(item.repo, item.file.path);
+    const readmeMdFile = contents.find(f => f.name === 'README.md' && f.type === 'file');
+
+    if (readmeMdFile?.download_url) {
+        previewContent += await githubService.getFileContent(item.repo, readmeMdFile.download_url);
+    } else if (!previewContent) {
+        previewContent = `# ${item.name}\n\n*(No plugin metadata or README found)*`;
+    }
+    return previewContent;
+}
+
+async function buildFolderListing(item: CopilotItem, githubService: GitHubService): Promise<string> {
+    const entries = await githubService.listDirectoryTree(item.repo, item.file.path);
+    const folderPrefix = item.file.path.endsWith('/') ? item.file.path : `${item.file.path}/`;
+    const fileList = entries
+        .filter(f => f.type === 'file')
+        .map(f => `- ${f.path.startsWith(folderPrefix) ? f.path.substring(folderPrefix.length) : f.path}`)
+        .join('\n');
+
+    const label = FOLDER_LABELS[item.category] ?? 'folder';
+    const noun = label.replace(/ folder$/, '');
+    return `# ${item.name}\n\n**${capitalize(label).replace(/ folder$/, ' Folder')} Contents:**\n\n${fileList}\n\nDownload this ${noun} to get all files.`;
 }
 
 // This method is called when your extension is deactivated

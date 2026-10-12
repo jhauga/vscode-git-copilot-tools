@@ -21,12 +21,14 @@ export class CopilotPreviewProvider implements vscode.TextDocumentContentProvide
         const lines = item.content?.split('\n') || [];
         const preview = lines.slice(0, 15).join('\n');
         const truncated = lines.length > 15 ? '\n\n... (truncated, download to see full content)' : '';
+        // Folders have no download URL; show their repository path instead
+        const source = item.file.download_url ?? `${item.repo.owner}/${item.repo.repo}/${item.file.path}`;
 
         return `# ${item.name}
 
 **Category:** ${item.category}
 **Size:** ${(item.file.size / 1024).toFixed(1)}KB
-**Source:** ${item.file.download_url}
+**Source:** ${source}
 
 ---
 
